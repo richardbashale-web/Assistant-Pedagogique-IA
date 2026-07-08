@@ -1,0 +1,87 @@
+{
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": [
+        "bonjour", "salut", "hello", "coucou", "ca va", "hey", "bonsoir", "est ce qu'il y a quelqu'un", "allo"
+      ],
+      "responses": [
+        "Bonjour ! Comment puis-je t'aider aujourd'hui ? 👋",
+        "Salut ! Ravi de te voir. En quoi puis-je t'assister ? 😊",
+        "Hello ! Je suis ton assistant pédagogique. Pose-moi tes questions ! 🎓"
+      ]
+    },
+    {
+      "tag": "goodbye",
+      "patterns": [
+        "au revoir", "bye", "a plus", "ciao", "quitter", "arreter", "merci au revoir"
+      ],
+      "responses": [
+        "Au revoir ! Bonne chance dans tes études ! 📚",
+        "À bientôt ! N'hésite pas si tu as d'autres questions. 👋",
+        "Passe une excellente journée ! Succès dans tes révisions. ✨"
+      ]
+    },
+    {
+      "tag": "thanks",
+      "patterns": [
+        "merci", "thanks", "je te remercie", "c'est gentil", "super merci", "genial", "cool"
+      ],
+      "responses": [
+        "Je t'en prie ! C'est un plaisir de t'aider. 🚀",
+        "De rien ! N'hésite pas à me solliciter. 😊",
+        "Avec plaisir ! Bon courage pour la suite. 👍"
+      ]
+    },
+    {
+      "tag": "study_advice",
+      "patterns": [
+        "conseils d'etude", "comment etudier", "aider a reviser", "astuces examen", "reussir les examens", "aider moi a etudier", "méthode de travail", "planifier mes révisions"
+      ],
+      "responses": [
+        "Voici mes meilleurs conseils : \n1. Utilise la méthode Pomodoro (25 min d'étude / 5 min de pause).\n2. Fais des fiches de synthèse après chaque chapitre.\n3. Dors 8h par nuit pour consolider ta mémoire. 🧠",
+        "Pour bien réviser, je te suggère de : \n- Varier les matières pour éviter l'ennui.\n- Tenter d'expliquer le cours à quelqu'un d'autre.\n- Éviter les distractions (téléphone loin !). 📵"
+      ]
+    },
+    {
+      "tag": "recommandation",
+      "patterns": [
+        "recommande moi un cours", "quel cours choisir", "aider moi a choisir une matiere", "que faire apres", "suggestion de cours", "propose moi un cours"
+      ],
+      "responses": [
+        "Si tu me donnes ton niveau (L1, L2, L3), je pourrai te conseiller au mieux ! Sinon, explorer l'intelligence artificielle est un excellent choix cette année. 🤖",
+        "Je te suggère de regarder les cours de programmation Python si tu débutes. C'est la base de tout ! 🐍"
+      ]
+    },
+    {
+      "tag": "course_info",
+      "patterns": [
+        "les cours disponibles", "liste des matieres", "quels sont les cours", "quelles matieres", "affiche les cours"
+      ],
+      "responses": [
+        "Nous avons des cours de Base de données, IA, Programmation, et Réseaux. Lequel t'intéresse ?",
+        "Voici les thématiques couvertes : Informatique, Gestion de projets, et Mathématiques. Consulte l'onglet Cours pour plus de détails !"
+      ]
+    },
+    {
+      "tag": "student_lookup",
+      "patterns": [
+        "combien d'etudiants", "nombre d'eleves", "total des etudiants", "qui est inscrit", "liste des etudiants"
+      ],
+      "responses": [
+        "Nous avons une communauté grandissante ! Je vais vérifier le nombre exact pour toi...",
+        "Beaucoup d'étudiants sont inscrits cette année. Tu fais partie d'un grand réseau ! 🎓"
+      ]
+    },
+    {
+      "tag": "identity",
+      "patterns": [
+        "qui es-tu", "tu es qui", "ton nom", "que fais-tu", "comment t'appelles-tu", "c'est quoi ton role", "que peux-tu faire", "qu'est ce que tu peux faire", "qui t'a créé", "qui t'a conçu", "qui est ton créateur", "le créateur"
+      ],
+      "responses": [
+        "Je suis BashAI, ton assistant IA dédié à ta réussite pédagogique ! J'ai été conçu par Richard Bashale Kanku. ",
+        "On m'appelle BashAI, l'Assistant pedagogique IA. Mon but est de t'aider à naviguer dans tes cours et à t'organiser. Richard Bashale Kanku est mon créateur."
+      ]
+    }
+  ]
+}
