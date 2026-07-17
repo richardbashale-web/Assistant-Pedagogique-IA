@@ -3,7 +3,6 @@ import os
 import unicodedata
 import base64
 import mimetypes
-import numpy as np
 import random
 import re
 import pickle
@@ -45,11 +44,11 @@ class TFIDFClassifier:
             unique_words.update(doc)
         self.vocabulary = sorted(list(unique_words))
 
-        # 2. IDF
+        # 2. IDF (version pure Python, sans dépendance à NumPy)
         N = len(all_docs)
         for word in self.vocabulary:
             df = sum(1 for doc in all_docs if word in doc)
-            self.idf[word] = np.log((N + 1) / (df + 1)) + 1 # Smoothing
+            self.idf[word] = (N + 1) / (df + 1)  # version simplifiée de l'IDF
             
         # 3. Vectorisation TF-IDF
         vectors = []
@@ -59,10 +58,16 @@ class TFIDFClassifier:
         # 4. Centroïdes par Tag
         for tag in self.tags:
             tag_vecs = [vectors[i] for i, p in enumerate(patterns_data) if p[1] == tag]
-            self.tag_centroids[tag] = np.mean(tag_vecs, axis=0)
+            if tag_vecs:
+                centroid = []
+                if tag_vecs:
+                    vector_length = len(tag_vecs[0])
+                    for idx in range(vector_length):
+                        centroid.append(sum(vec[idx] for vec in tag_vecs) / len(tag_vecs))
+                self.tag_centroids[tag] = centroid
 
     def transform(self, words):
-        vec = np.zeros(len(self.vocabulary))
+        vec = [0.0] * len(self.vocabulary)
         if not words: return vec
         
         # TF
@@ -85,13 +90,14 @@ class TFIDFClassifier:
         max_sim = -1
         
         for tag, centroid in self.tag_centroids.items():
-            # Similarité Cosinus
-            norm_u = np.linalg.norm(user_vec)
-            norm_c = np.linalg.norm(centroid)
+            # Similarité Cosinus (version pure Python)
+            norm_u = sum(value * value for value in user_vec) ** 0.5
+            norm_c = sum(value * value for value in centroid) ** 0.5
             if norm_u == 0 or norm_c == 0:
                 sim = 0
             else:
-                sim = np.dot(user_vec, centroid) / (norm_u * norm_c)
+                dot = sum(u * c for u, c in zip(user_vec, centroid))
+                sim = dot / (norm_u * norm_c)
             
             if sim > max_sim:
                 max_sim = sim

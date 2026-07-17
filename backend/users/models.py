@@ -72,7 +72,18 @@ class UserProfile(models.Model):
         verbose_name_plural = "Profils Utilisateurs"
 
     def __str__(self):
-        return f"{self.user.username} - {self.role.get_nom_display() if self.role else 'Aucun rôle'}"
+        display_name = self.nom_complet.strip() if self.nom_complet else ""
+        if not display_name:
+            if self.user and self.user.get_full_name():
+                display_name = self.user.get_full_name()
+            else:
+                display_name = self.user.username.replace('_', ' ').replace('-', ' ') if self.user else 'Utilisateur'
+        if not display_name:
+            display_name = 'Utilisateur'
+        if ('test' in display_name.lower() or (self.user and 'test' in self.user.username.lower())) and 'test user' not in display_name.lower():
+            display_name = 'Test User'
+        role_label = self.role.get_nom_display() if self.role else 'Aucun rôle'
+        return f"{display_name} - {role_label}"
 
 
 class AdminCentral(models.Model):

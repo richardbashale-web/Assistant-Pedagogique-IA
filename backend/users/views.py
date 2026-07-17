@@ -1,5 +1,5 @@
 from rest_framework import generics, status
-from .models import Student, Professor, Role, UserProfile, Faculty, AdminCentral, AdminGestionnaire
+from .models import Student, Professor, Role, UserProfile, Faculty, AdminCentral, AdminGestionnaire, SecretaireFacultaire
 from .serializers import StudentSerializer, ProfessorSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -266,10 +266,15 @@ def create_secretaire(request):
     email = request.data.get('email')
     password = request.data.get('password')
     nom_complet = request.data.get('nom_complet')
-    faculte = request.data.get('faculte')
+    faculte_code = request.data.get('faculte')
 
-    if not all([username, email, password, faculte]):
+    if not all([username, email, password, faculte_code]):
         return Response({"error": "Données manquantes"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        faculty = Faculty.objects.get(code=faculte_code)
+    except Faculty.DoesNotExist:
+        return Response({"error": "Faculté introuvable"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.create_user(username=username, email=email, password=password)
@@ -282,7 +287,7 @@ def create_secretaire(request):
             user=user,
             profile=profile,
             admin_gestionnaire=admin_gestionnaire,
-            faculte=faculte
+            faculte=faculty
         )
 
         return Response({

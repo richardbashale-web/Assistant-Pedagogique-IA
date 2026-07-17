@@ -6,12 +6,20 @@ from .models import Role, UserProfile
 def init_roles():
     """Initialise les rôles et permissions du système"""
 
+    group_names = {
+        'admin_central': 'Admin Central',
+        'admin_gestionnaire': 'Admin Gestionnaire',
+        'professeur': 'Professeur',
+        'secretaire_facultaire': 'Secrétaire Facultaire',
+        'etudiant': 'Étudiant',
+    }
+
     # Créer les groupes s'ils n'existent pas
-    admin_central_group, _ = Group.objects.get_or_create(name='Admin Central')
-    admin_gestionnaire_group, _ = Group.objects.get_or_create(name='Admin Gestionnaire')
-    professeur_group, _ = Group.objects.get_or_create(name='Professeur')
-    secretaire_group, _ = Group.objects.get_or_create(name='Secrétaire Facultaire')
-    etudiant_group, _ = Group.objects.get_or_create(name='Étudiant')
+    admin_central_group, _ = Group.objects.get_or_create(name=group_names['admin_central'])
+    admin_gestionnaire_group, _ = Group.objects.get_or_create(name=group_names['admin_gestionnaire'])
+    professeur_group, _ = Group.objects.get_or_create(name=group_names['professeur'])
+    secretaire_group, _ = Group.objects.get_or_create(name=group_names['secretaire_facultaire'])
+    etudiant_group, _ = Group.objects.get_or_create(name=group_names['etudiant'])
 
     # Permissions pour Admin Central
     admin_central_perms = [
@@ -52,13 +60,9 @@ def init_roles():
 
     def add_perms_to_group(group, perm_names):
         for perm_name in perm_names:
-            try:
-                perms = Permission.objects.filter(codename=perm_name)
-                for perm in perms:
-                    group.permissions.add(perm)
-            except Permission.DoesNotExist:
-                pass
-
+            perms = Permission.objects.filter(codename=perm_name)
+            for perm in perms:
+                group.permissions.add(perm)
 
     add_perms_to_group(admin_central_group, admin_central_perms)
     add_perms_to_group(admin_gestionnaire_group, admin_gestionnaire_perms)
@@ -66,34 +70,43 @@ def init_roles():
     add_perms_to_group(secretaire_group, secretaire_perms)
     add_perms_to_group(etudiant_group, etudiant_perms)
 
-    # Créer les rôles s'ils n'existent pas
-    Role.objects.get_or_create(
-        nom='admin_central',
-        defaults={'description': 'Administrateur central avec tous les privilèges'}
-    )
-    Role.objects.get_or_create(
-        nom='admin_gestionnaire',
-        defaults={'description': 'Gère les secrétaires facultaires et les informations des facultés'}
-    )
-    Role.objects.get_or_create(
-        nom='professeur',
-        defaults={'description': 'Responsable des contenus pédagogiques'}
-    )
-    Role.objects.get_or_create(
-        nom='secretaire_facultaire',
-        defaults={'description': 'Gère les enseignants au niveau de la faculté'}
-    )
-    Role.objects.get_or_create(
-        nom='etudiant',
-        defaults={'description': 'Utilisateur principal de l\'assistant pédagogique'}
-    )
+    # Créer les rôles s'ils n'existent pas et associer les permissions
+    role_permissions = {
+        'admin_central': admin_central_perms,
+        'admin_gestionnaire': admin_gestionnaire_perms,
+        'professeur': professeur_perms,
+        'secretaire_facultaire': secretaire_perms,
+        'etudiant': etudiant_perms,
+    }
+
+    role_defaults = {
+        'admin_central': {'description': 'Administrateur central avec tous les privilèges'},
+        'admin_gestionnaire': {'description': 'Gère les secrétaires facultaires et les informations des facultés'},
+        'professeur': {'description': 'Responsable des contenus pédagogiques'},
+        'secretaire_facultaire': {'description': 'Gère les enseignants au niveau de la faculté'},
+        'etudiant': {'description': 'Utilisateur principal de l\'assistant pédagogique'},
+    }
+
+    for role_nom, defaults in role_defaults.items():
+        role, _ = Role.objects.get_or_create(nom=role_nom, defaults=defaults)
+        perms = Permission.objects.filter(codename__in=role_permissions[role_nom])
+        if perms.exists():
+            role.permissions.clear()
+            role.permissions.add(*perms)
 
 
 def assign_role_to_user(user, role_nom):
     """Assigne un rôle à un utilisateur"""
     try:
         role = Role.objects.get(nom=role_nom)
-        group = Group.objects.get(name=role.get_nom_display())
+        group_names = {
+            'admin_central': 'Admin Central',
+            'admin_gestionnaire': 'Admin Gestionnaire',
+            'professeur': 'Professeur',
+            'secretaire_facultaire': 'Secrétaire Facultaire',
+            'etudiant': 'Étudiant',
+        }
+        group = Group.objects.get(name=group_names.get(role_nom, role.get_nom_display()))
 
         # Créer ou récupérer le profil
         try:
@@ -105,6 +118,8 @@ def assign_role_to_user(user, role_nom):
             )
 
         profile.role = role
+        if not profile.nom_complet:
+            profile.nom_complet = user.get_full_name() or user.username
         profile.save()
 
         # Ajouter l'utilisateur au groupe

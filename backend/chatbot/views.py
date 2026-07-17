@@ -1,15 +1,23 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-import spacy
+try:
+    import spacy
+except Exception:
+    spacy = None
 import unicodedata
 from users.models import Student
 from courses.models import Course, CourseNote
 from .models import ChatMessage, Conversation
 from .ml_model import get_ml_prediction, get_response_by_tag, get_llm_response, summarize_conversation
 
-# Charger le modèle français de SpaCy
-nlp = spacy.load("fr_core_news_sm")
+# Charger le modèle français de SpaCy si disponible (évite d'échouer au démarrage)
+nlp = None
+if spacy is not None:
+    try:
+        nlp = spacy.load("fr_core_news_sm")
+    except Exception:
+        nlp = None
 
 def normalize_text(text):
     """Supprime les accents et met en minuscule pour faciliter la correspondance."""
@@ -24,17 +32,20 @@ def find_course_notes_for_message(raw_message):
         return []
 
     message_lower = raw_message.lower()
+    normalized_message = normalize_text(raw_message)
     if 'note' not in message_lower and 'notes' not in message_lower:
         query_terms = [
             'cours', 'professeur', 'examen', 'chapitre', 'programme', 'syllabus',
             'définition', 'théorie', 'exercice', 'récursivité', 'python', 'algorithm',
             'algorithme', 'base', 'intelligence', 'programmation', 'variable', 'variables',
-            'fonction', 'fonctions', 'struct', 'structure', 'data', 'donnée', 'données'
+            'fonction', 'fonctions', 'struct', 'structure', 'data', 'donnée', 'données',
+            'système', 'information', 'systèm', 'information', 'quoi', 'qu’est', 'quest',
+            'explique', 'explication', 'concept', 'concepts', 'signifie', 'signification',
+            'définis', 'définir', 'comprendre', 'comprendre'
         ]
         if not any(term in message_lower for term in query_terms):
             return []
 
-    normalized_message = normalize_text(raw_message)
     matched_notes = []
 
     for course in Course.objects.all():
@@ -58,7 +69,8 @@ def find_course_notes_for_message(raw_message):
         for keyword in [
             'récursivité', 'python', 'algorithme', 'programmation', 'cours', 'définition',
             'théorie', 'exercice', 'problème', 'concept', 'chapitre', 'variable', 'variables',
-            'fonction', 'fonctions', 'structure', 'donnée', 'données'
+            'fonction', 'fonctions', 'structure', 'donnée', 'données', 'système', 'information',
+            'information', 'quoi', 'explique', 'concepts', 'signification', 'comprendre'
         ]:
             if keyword in note_text:
                 score += 2
@@ -294,11 +306,16 @@ def chatbot_response(request):
         if matched_course:
             reply = f"Tu parles du cours de {matched_course.titre} ? Il est dispensé par le professeur {matched_course.professeur}."
 
-    # --- COUCHE 3.5 : NOTES DE COURS (PRIORITÉ) ---
-    if not reply:
-        notes = find_course_notes_for_message(raw_message)
-        if notes:
-            reply = format_notes_response(notes)
+    # --- COUCHE 3.5 : NOTES DE COURS (PRIORITÉ ABSOLUE) ---
+    notes_for_message = []
+    if raw_message:
+        normalized = normalize_text(raw_message)
+        note_keywords = ['cours', 'note', 'notes', 'professeur', 'chapitre', 'examen', 'programme', 'syllabus', 'définition', 'théorie', 'exercice', 'python', 'algorithme', 'programmation', 'récursivité', 'système', 'information', 'quoi', 'explique', 'concept', 'signification', 'comprendre', 'question', 'definition']
+        if any(keyword in normalized for keyword in note_keywords):
+            notes_for_message = find_course_notes_for_message(raw_message)
+
+    if not reply and notes_for_message:
+        reply = format_notes_response(notes_for_message)
 
     # --- COUCHE 4 : PRO LLM FALLBACK (Multimodal) ---
     if not reply or confidence < 0.35 or uploaded_file:

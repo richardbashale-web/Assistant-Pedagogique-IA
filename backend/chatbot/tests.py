@@ -102,3 +102,16 @@ class CourseNoteRetrievalTests(TestCase):
         self.assertIn("D’après les notes", reply)
         self.assertIn("Prof Test", reply)
         self.assertIn("Programmation Python", reply)
+
+    def test_finds_notes_for_general_definition_question(self):
+        note = CourseNote.objects.create(
+            course=self.course,
+            professor=self.professor,
+            title="Système d'information",
+            content="Un système d'information est un ensemble de personnes, de processus et de technologies qui collectent et traitent des données.",
+        )
+
+        notes = find_course_notes_for_message("C'est quoi un système d'information ?")
+
+        self.assertTrue(notes)
+        self.assertIn(note, notes)
