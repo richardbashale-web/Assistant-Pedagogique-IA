@@ -156,7 +156,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # LLM API - Gemini uniquement
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyBRJALm-oCH3ohTGozv1RfpOvBY74mpmdQ')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

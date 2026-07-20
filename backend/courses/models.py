@@ -3,7 +3,10 @@ from django.db import models
 class Course(models.Model):
     titre = models.CharField(max_length=200)
     description = models.TextField()
-    professeur = models.CharField(max_length=100) # On peut garder CharField ou passer en ForeignKey plus tard
+    professeur = models.ForeignKey('users.Professor',
+    on_delete=models.CASCADE,
+    related_name='courses'
+)
     date_creation = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
