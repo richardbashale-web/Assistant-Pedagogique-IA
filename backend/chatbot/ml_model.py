@@ -111,16 +111,19 @@ _engine = None
 def train_and_save():
     global _engine
     try:
-        with open(INTENTS_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        from chatbot.models import Intent
+        intents = Intent.objects.prefetch_related('patterns').all()
         
         patterns_data = []
-        for intent in data["intents"]:
-            for pattern in intent["patterns"]:
-                words = normalize_text(pattern)
+        for intent in intents:
+            for pattern in intent.patterns.all():
+                words = normalize_text(pattern.text)
                 if words:
-                    patterns_data.append((words, intent["tag"]))
+                    patterns_data.append((words, intent.tag))
         
+        if not patterns_data:
+            return False
+
         _engine = TFIDFClassifier()
         _engine.fit(patterns_data)
         
@@ -147,24 +150,22 @@ def get_ml_prediction(text):
     return None, 0
 
 # --- Apprentissage Automatique ---
-def add_new_pattern(tag, pattern):
+def add_new_intent(tag, patterns, responses):
     """Ajoute dynamiquement une phrase au modèle et ré-entraîne."""
     try:
-        with open(INTENTS_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        from chatbot.models import Intent, Pattern, Response
+        intent, created = Intent.objects.get_or_create(tag=tag)
         
-        for intent in data["intents"]:
-            if intent["tag"] == tag:
-                if pattern not in intent["patterns"]:
-                    intent["patterns"].append(pattern)
-                    break
-        
-        with open(INTENTS_PATH, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        for p in patterns:
+            Pattern.objects.get_or_create(intent=intent, text=p)
+            
+        for r in responses:
+            Response.objects.get_or_create(intent=intent, text=r)
         
         train_and_save()
         return True
-    except:
+    except Exception as e:
+        print(f"Erreur add_new_intent: {e}")
         return False
 
 # --- PRO LEVEL : Gemini LLM Connector ---
@@ -278,13 +279,15 @@ def summarize_conversation(history, context=""):
     return history.strip()[:1000]
 
 def get_response_by_tag(tag):
-    """Récupère une réponse aléatoire pour un tag donné dans intents.json."""
+    """Récupère une réponse aléatoire pour un tag donné dans la BD."""
     try:
-        with open(INTENTS_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        for intent in data["intents"]:
-            if intent["tag"] == tag:
-                return random.choice(intent["responses"])
-    except:
+        from chatbot.models import Intent
+        import random
+        intent = Intent.objects.get(tag=tag)
+        responses = list(intent.responses.all())
+        if responses:
+            return random.choice(responses).text
+    except Exception as e:
+        print(f"Erreur get_response_by_tag: {e}")
         pass
     return "Je comprends, mais je n'ai pas de réponse précise pour ce sujet."

@@ -29,3 +29,25 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.sender}: {self.text[:20]}..."
+
+class Intent(models.Model):
+    tag = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.tag
+
+class Pattern(models.Model):
+    intent = models.ForeignKey(Intent, on_delete=models.CASCADE, related_name='patterns')
+    text = models.CharField(max_length=500)
+
+    def __str__(self):
+        return self.text
+
+class Response(models.Model):
+    intent = models.ForeignKey(Intent, on_delete=models.CASCADE, related_name='responses')
+    text = models.TextField()
+
+    def __str__(self):
+        return self.text[:50]

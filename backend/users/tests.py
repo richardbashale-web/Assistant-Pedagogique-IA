@@ -124,3 +124,36 @@ class UserProfileTest(TestCase):
         assign_role_to_user(self.user, 'etudiant')
         self.assertIn('test user', str(profile).lower())
         self.assertIn('étudiant', str(profile).lower())
+
+
+class CascadeDeleteTest(TestCase):
+    """Tests pour valider la suppression en cascade complète des comptes et rôles"""
+
+    def setUp(self):
+        init_roles()
+        self.central_user = User.objects.create_user('central', 'central@test.com', 'pass123')
+        assign_role_to_user(self.central_user, 'admin_central')
+        self.admin_central = AdminCentral.objects.create(
+            user=self.central_user,
+            profile=self.central_user.profile
+        )
+
+        self.gest_user = User.objects.create_user('gestionnaire', 'gest@test.com', 'pass123')
+        assign_role_to_user(self.gest_user, 'admin_gestionnaire')
+        self.admin_gestionnaire = AdminGestionnaire.objects.create(
+            user=self.gest_user,
+            profile=self.gest_user.profile,
+            admin_central=self.admin_central
+        )
+
+    def test_delete_admin_central_deletes_all_linked_users(self):
+        """Vérifie que la suppression d'un AdminCentral supprime le user central et le gestionnaire lié"""
+        central_user_id = self.central_user.id
+        gest_user_id = self.gest_user.id
+
+        self.admin_central.delete()
+
+        self.assertFalse(User.objects.filter(id=central_user_id).exists())
+        self.assertFalse(User.objects.filter(id=gest_user_id).exists())
+        self.assertFalse(AdminGestionnaire.objects.filter(id=self.admin_gestionnaire.id).exists())
+

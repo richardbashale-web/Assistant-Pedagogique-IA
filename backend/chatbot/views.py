@@ -292,7 +292,7 @@ def chatbot_response(request):
             elif "l2" in niv: c = Course.objects.filter(titre__icontains="python").first() or c
             elif "l3" in niv: c = Course.objects.filter(titre__icontains="intelligence").first() or c
             reply = f"Vu que tu es en {student.niveau}, je te suggère : {c.titre}. C'est parfait pour toi !"
-        elif intent_tag not in ["greeting", "identity"]: # Laisser l'IA gérer l'identité et les saluts
+        else:
             reply = get_response_by_tag(intent_tag)
     
     # --- COUCHE 3 : RÈGLES MÉTIER ET RECHERCHE ---
@@ -329,6 +329,12 @@ def chatbot_response(request):
         error_keywords = ["surcharge mentale", "désactivée", "erreur", "difficultés techniques", "vérifier la clé", "clé api"]
         if not any(kw in llm_reply.lower() for kw in error_keywords):
             reply = llm_reply
+            
+            # Sauvegarder dans la base locale (cache)
+            import hashlib
+            from .ml_model import add_new_intent
+            tag_hash = hashlib.md5(raw_message.encode('utf-8')).hexdigest()[:8]
+            add_new_intent(f"llm_cache_{tag_hash}", [raw_message], [llm_reply])
         else:
             reply = ("Je n'ai pas bien compris ta question, mais je progresse chaque jour ! 🤖\n\n"
                     "Tu peux me demander :\n"

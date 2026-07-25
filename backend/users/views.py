@@ -59,7 +59,27 @@ class ProfessorListCreateView(generics.ListCreateAPIView):
         if not (self.request.user.is_staff or can_manage_users(self.request.user)):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Seul un secrétaire ou un administrateur peut créer des professeurs.")
-        serializer.save()
+        
+        email = self.request.data.get('email', '')
+        nom = self.request.data.get('nom', '')
+        username = self.request.data.get('username') or (email.split('@')[0] if email else None)
+        password = self.request.data.get('password') or 'Professeur123!'
+
+        user = None
+        profile = None
+        if username and email:
+            if not User.objects.filter(username=username).exists() and not User.objects.filter(email=email).exists():
+                user = User.objects.create_user(username=username, email=email, password=password)
+                profile, _ = UserProfile.objects.get_or_create(user=user, defaults={'nom_complet': nom})
+                assign_role_to_user(user, 'professeur')
+            elif User.objects.filter(email=email).exists():
+                user = User.objects.filter(email=email).first()
+                if user:
+                    profile = getattr(user, 'profile', None)
+
+        secretaire = SecretaireFacultaire.objects.filter(user=self.request.user).first()
+        serializer.save(user=user, profile=profile, enregistre_par=secretaire)
+
 
 class ProfessorDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Professor.objects.all()
@@ -258,8 +278,8 @@ def create_admin_gestionnaire(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_secretaire(request):
-    """Crée un secrétaire facultaire (Admin Gestionnaire seulement)"""
-    if not user_has_role(request.user, 'admin_gestionnaire'):
+    """Crée un secrétaire facultaire (Admin Gestionnaire ou Admin Central)"""
+    if not (user_has_role(request.user, 'admin_gestionnaire') or user_has_role(request.user, 'admin_central') or request.user.is_superuser):
         return Response({"error": "Permission refusée"}, status=status.HTTP_403_FORBIDDEN)
 
     username = request.data.get('username')
@@ -271,6 +291,9 @@ def create_secretaire(request):
     if not all([username, email, password, faculte_code]):
         return Response({"error": "Données manquantes"}, status=status.HTTP_400_BAD_REQUEST)
 
+    if User.objects.filter(username=username).exists():
+        return Response({"error": "Nom d'utilisateur déjà pris"}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
         faculty = Faculty.objects.get(code=faculte_code)
     except Faculty.DoesNotExist:
@@ -281,8 +304,7 @@ def create_secretaire(request):
         profile = UserProfile.objects.create(user=user, nom_complet=nom_complet)
         assign_role_to_user(user, 'secretaire_facultaire')
 
-        admin_gestionnaire_user = request.user
-        admin_gestionnaire = AdminGestionnaire.objects.get(user=admin_gestionnaire_user)
+        admin_gestionnaire = AdminGestionnaire.objects.filter(user=request.user).first()
         SecretaireFacultaire.objects.create(
             user=user,
             profile=profile,
@@ -297,6 +319,7 @@ def create_secretaire(request):
         })
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 @api_view(['GET'])
