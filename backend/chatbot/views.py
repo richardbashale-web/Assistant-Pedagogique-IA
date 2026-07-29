@@ -6,10 +6,11 @@ try:
 except Exception:
     spacy = None
 import unicodedata
-from users.models import Student
+from users.models import Student, Professor, SecretaireFacultaire
 from courses.models import Course, CourseNote
 from .models import ChatMessage, Conversation
 from .ml_model import get_ml_prediction, get_response_by_tag, get_llm_response, summarize_conversation
+
 
 # Charger le modèle français de SpaCy si disponible (évite d'échouer au démarrage)
 nlp = None
@@ -359,3 +360,68 @@ def chatbot_response(request):
         "conversation_id": conversation.id if conversation else None,
         "conversation_title": conversation.title if conversation else None
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def student_progress(request):
+    """
+    Retourne le suivi des étudiants avec leur activité chatbot.
+    - Admin Central / Admin Gestionnaire : tous les étudiants
+    - Secrétaire Facultaire : uniquement les étudiants de sa faculté
+    - Professeur : uniquement les étudiants de sa faculté
+    """
+    from users.models import UserProfile
+
+    user = request.user
+    profile = getattr(user, 'profile', None)
+    role = profile.role.nom if profile and profile.role else None
+
+    # Déterminer le filtre de faculté selon le rôle
+    faculte_filter = None
+    if role == 'secretaire_facultaire':
+        secretaire = SecretaireFacultaire.objects.filter(user=user).first()
+        if secretaire:
+            faculte_filter = secretaire.faculte
+    elif role == 'professeur':
+        professor = Professor.objects.filter(user=user).first()
+        if professor:
+            faculte_filter = professor.faculte
+
+    # Construire le queryset
+    if faculte_filter:
+        students_qs = Student.objects.filter(faculte=faculte_filter)
+    else:
+        # Admin central / gestionnaire : tous les étudiants
+        students_qs = Student.objects.all()
+
+    result = []
+    for student in students_qs:
+        if student.user:
+            convs = Conversation.objects.filter(user=student.user)
+            conv_count = convs.count()
+            last_conv = convs.order_by('-updated_at').first()
+            last_msg = None
+            if last_conv:
+                last_msg_obj = ChatMessage.objects.filter(
+                    conversation=last_conv, sender='user'
+                ).order_by('-timestamp').first()
+                last_msg = last_msg_obj.text if last_msg_obj else None
+        else:
+            conv_count = 0
+            last_conv = None
+            last_msg = None
+
+        result.append({
+            'student_id': student.id,
+            'nom': student.nom,
+            'niveau': student.niveau,
+            'matricule': student.matricule or '-',
+            'faculte': student.faculte.nom if student.faculte else '-',
+            'conversations_count': conv_count,
+            'last_conversation_title': last_conv.title if last_conv else None,
+            'last_message': last_msg,
+        })
+
+    return Response(result)
+

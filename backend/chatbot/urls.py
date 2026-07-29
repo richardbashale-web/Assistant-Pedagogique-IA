@@ -6,4 +6,5 @@ urlpatterns = [
     path('history/', views.chat_history, name='chat_history'),
     path('conversations/', views.list_conversations, name='list_conversations'),
     path('conversations/<int:conv_id>/', views.delete_conversation, name='delete_conversation'),
-]
+    path('progress/students/', views.student_progress, name='student_progress'),
+]
