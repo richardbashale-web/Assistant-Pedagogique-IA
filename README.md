@@ -136,6 +136,11 @@ npm start
 
 ![Students](screenshots/student_management.png)
 
+## 🎥 Project Demo
+
+Watch the project demonstration here:
+
+https://youtu.be/K3GZgKP5uDY?si=wU2bfbTYhL3E3dNq
 
 ## 🎯 Future Improvements
 
