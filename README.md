@@ -118,17 +118,24 @@ npm start
 
 ---
 
-## 📸 Screenshots
+## 📸 Application Screenshots
 
-> Screenshots will be added soon.
+### Login Page
 
-- Login Page
-- Dashboard
-- AI Chatbot
-- Student Management
-- Course Management
+![Login](screenshots/login.png)
 
----
+### Dashboard
+
+![Dashboard](screenshots/interface_admin_central.png)
+
+### AI Chatbot
+
+![Chatbot](screenshots/chat.png)
+
+### Student Management
+
+![Students](screenshots/student_management.png)
+
 
 ## 🎯 Future Improvements
 
