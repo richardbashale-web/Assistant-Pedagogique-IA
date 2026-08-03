@@ -1,4 +1,4 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from .models import CourseNote
 
@@ -44,3 +44,28 @@ def feed_knowledge_base(sender, instance, created, **kwargs):
             print(f"[Signal] Base ML mise à jour avec la note : {tag}")
     except Exception as e:
         print(f"[Signal] Erreur lors de la mise à jour ML: {e}")
+
+
+@receiver(post_delete, sender=CourseNote)
+def delete_course_note_attachment(sender, instance, **kwargs):
+    if instance.attachment:
+        try:
+            instance.attachment.delete(save=False)
+        except Exception:
+            pass
+
+
+@receiver(pre_save, sender=CourseNote)
+def delete_old_course_note_attachment(sender, instance, **kwargs):
+    if not instance.pk:
+        return
+    try:
+        old_instance = CourseNote.objects.get(pk=instance.pk)
+    except CourseNote.DoesNotExist:
+        return
+
+    if old_instance.attachment and old_instance.attachment != instance.attachment:
+        try:
+            old_instance.attachment.delete(save=False)
+        except Exception:
+            pass

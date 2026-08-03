@@ -62,7 +62,7 @@ class CourseNoteRetrievalTests(TestCase):
         self.course = Course.objects.create(
             titre="Programmation Python",
             description="Cours de Python",
-            professeur="Prof Test",
+            professeur=self.professor,
         )
         self.note = CourseNote.objects.create(
             course=self.course,
@@ -99,9 +99,9 @@ class CourseNoteRetrievalTests(TestCase):
     def test_notes_response_mentions_professor_and_course(self):
         notes = find_course_notes_for_message("Peux-tu m'expliquer la récursivité ?")
         reply = format_notes_response(notes)
-        self.assertIn("D’après les notes", reply)
-        self.assertIn("Prof Test", reply)
-        self.assertIn("Programmation Python", reply)
+        self.assertIn("La récursivité est un concept central en programmation.", reply)
+        self.assertIn("Source : note de cours de Prof Test.", reply)
+        self.assertNotIn("D’après les notes", reply)
 
     def test_finds_notes_for_general_definition_question(self):
         note = CourseNote.objects.create(
@@ -115,3 +115,49 @@ class CourseNoteRetrievalTests(TestCase):
 
         self.assertTrue(notes)
         self.assertIn(note, notes)
+
+    def test_finds_note_from_uploaded_attachment_content(self):
+        attachment_note = CourseNote.objects.create(
+            course=self.course,
+            professor=self.professor,
+            title="Variables Python",
+            content="Les variables en Python permettent de stocker des valeurs pour être réutilisées dans un programme.",
+        )
+
+        notes = find_course_notes_for_message("Comment déclarer des variables en python ?")
+
+        self.assertTrue(notes)
+        self.assertIn(attachment_note, notes)
+
+    def test_finds_notes_for_requested_professor(self):
+        second_user = User.objects.create_user(username="prof2", email="prof2@example.com", password="1234")
+        second_profile = UserProfile.objects.create(
+            user=second_user,
+            role=self.role,
+            nom_complet="Hervé Kinkete",
+        )
+        second_professor = Professor.objects.create(
+            user=second_user,
+            profile=second_profile,
+            nom="Hervé Kinkete",
+            email="prof2@example.com",
+            specialite="Système d'information",
+            faculte=self.faculty,
+        )
+        second_course = Course.objects.create(
+            titre="Conception d'un Système d'information",
+            description="Cours sur les systèmes d'information.",
+            professeur=second_professor,
+        )
+        second_note = CourseNote.objects.create(
+            course=second_course,
+            professor=second_professor,
+            title="Système d'information",
+            content="Un système d'information est un ensemble organisé de ressources qui collecte, stocke et traite des informations.",
+        )
+
+        notes = find_course_notes_for_message("Je veux celle du note du cours de prof Hervé Kinkete")
+
+        self.assertTrue(notes)
+        self.assertIn(second_note, notes)
+        self.assertEqual(notes[0].professor, second_professor)

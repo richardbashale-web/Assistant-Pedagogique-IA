@@ -2,9 +2,23 @@ from rest_framework import serializers
 from .models import Course, CourseNote
 
 class CourseSerializer(serializers.ModelSerializer):
+    professeur_nom = serializers.CharField(source='professeur.nom', read_only=True)
+    faculte_nom = serializers.CharField(source='faculte.nom', read_only=True)
+
     class Meta:
         model = Course
-        fields = '__all__'
+        fields = ['id', 'titre', 'description', 'professeur', 'professeur_nom', 'faculte', 'faculte_nom', 'promotions', 'date_creation']
+        read_only_fields = ['professeur_nom', 'faculte_nom', 'date_creation']
+
+    def validate_promotions(self, value):
+        if not value:
+            raise serializers.ValidationError("Veuillez associer ce cours à au moins une promotion.")
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Les promotions doivent être fournies sous forme de liste.")
+        cleaned = [str(item).strip() for item in value if str(item).strip()]
+        if not cleaned:
+            raise serializers.ValidationError("Veuillez associer ce cours à au moins une promotion.")
+        return cleaned
 
 class CourseNoteSerializer(serializers.ModelSerializer):
     professor_name = serializers.CharField(source='professor.nom', read_only=True)

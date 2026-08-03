@@ -7,6 +7,8 @@ class Course(models.Model):
     on_delete=models.CASCADE,
     related_name='courses'
 )
+    faculte = models.ForeignKey('users.Faculty', on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
+    promotions = models.JSONField(default=list, blank=True)
     date_creation = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

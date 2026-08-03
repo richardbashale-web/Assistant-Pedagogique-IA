@@ -5,7 +5,9 @@ try:
     import spacy
 except Exception:
     spacy = None
+import os
 import unicodedata
+import re
 from users.models import Student, Professor, SecretaireFacultaire
 from courses.models import Course, CourseNote
 from .models import ChatMessage, Conversation
@@ -22,91 +24,260 @@ if spacy is not None:
 
 def normalize_text(text):
     """Supprime les accents et met en minuscule pour faciliter la correspondance."""
-    if not text: return ""
+    if not text:
+        return ""
     text = text.lower().strip()
     return ''.join(c for c in unicodedata.normalize('NFD', text)
                   if unicodedata.category(c) != 'Mn')
+
+
+def tokenize_text(text):
+    normalized = normalize_text(text or "")
+    return [token for token in re.findall(r"\w+", normalized) if token]
+
+
+def is_greeting_message(message):
+    normalized = normalize_text(message or "")
+    if not normalized:
+        return False
+    greeting_terms = [
+        'bonjour', 'salut', 'coucou', 'hello', 'bonsoir', 'allo', 'hey', 'yo'
+    ]
+    tokens = normalized.split()
+    if len(tokens) == 1 and tokens[0] in greeting_terms:
+        return True
+    if len(tokens) <= 2 and any(tokens[0] == term for term in greeting_terms):
+        return True
+    return False
+
+
+def get_user_display_name(user):
+    if not user or not getattr(user, 'is_authenticated', False):
+        return None
+    profile = getattr(user, 'profile', None)
+    if profile and getattr(profile, 'nom_complet', None):
+        return profile.nom_complet.strip()
+    full_name = " ".join(filter(None, [user.first_name.strip() if user.first_name else '', user.last_name.strip() if user.last_name else ''])).strip()
+    if full_name:
+        return full_name
+    return user.username
+
+
+def extract_requested_professors(raw_message):
+    normalized_message = normalize_text(raw_message or "")
+    message_tokens = set(tokenize_text(raw_message or ""))
+    matched_professors = []
+
+    for professor in Professor.objects.all():
+        if not professor.nom:
+            continue
+        professor_name = normalize_text(professor.nom)
+        professor_tokens = set(re.findall(r"\w+", professor_name))
+        if not professor_tokens:
+            continue
+        if professor_name in normalized_message:
+            matched_professors.append(professor)
+            continue
+        if len(professor_tokens) >= 2 and professor_tokens.issubset(message_tokens):
+            matched_professors.append(professor)
+            continue
+        if any(token in professor_tokens for token in message_tokens) and "prof" in normalized_message:
+            matched_professors.append(professor)
+
+    return matched_professors
 
 
 def find_course_notes_for_message(raw_message):
     if not raw_message:
         return []
 
-    message_lower = raw_message.lower()
     normalized_message = normalize_text(raw_message)
-    if 'note' not in message_lower and 'notes' not in message_lower:
-        query_terms = [
-            'cours', 'professeur', 'examen', 'chapitre', 'programme', 'syllabus',
-            'définition', 'théorie', 'exercice', 'récursivité', 'python', 'algorithm',
-            'algorithme', 'base', 'intelligence', 'programmation', 'variable', 'variables',
-            'fonction', 'fonctions', 'struct', 'structure', 'data', 'donnée', 'données',
-            'système', 'information', 'systèm', 'information', 'quoi', 'qu’est', 'quest',
-            'explique', 'explication', 'concept', 'concepts', 'signifie', 'signification',
-            'définis', 'définir', 'comprendre', 'comprendre'
-        ]
-        if not any(term in message_lower for term in query_terms):
-            return []
+    message_tokens = tokenize_text(raw_message)
 
-    matched_notes = []
+    query_terms = [
+        'cours', 'professeur', 'examen', 'chapitre', 'programme', 'syllabus',
+        'definition', 'theorie', 'exercice', 'recursivite', 'python', 'algorithm',
+        'algorithme', 'base', 'intelligence', 'programmation', 'variable', 'variables',
+        'fonction', 'fonctions', 'struct', 'structure', 'data', 'donnee', 'donnees',
+        'systeme', 'information', 'quoi', 'quest', 'explique', 'explication',
+        'concept', 'concepts', 'signifie', 'signification', 'definis', 'definir',
+        'comprendre', 'question'
+    ]
+    query_terms = [normalize_text(term) for term in query_terms]
 
+    if len(message_tokens) < 2 and not any(term in normalized_message for term in query_terms):
+        return []
+
+    requested_professors = extract_requested_professors(raw_message)
+    if requested_professors:
+        professor_ids = [prof.id for prof in requested_professors]
+        notes = list(CourseNote.objects.filter(professor_id__in=professor_ids).order_by('-updated_at'))
+        if notes:
+            return notes[:5]
+
+    # Prioritize exact course title matches first.
     for course in Course.objects.all():
         course_title = normalize_text(course.titre)
         if course_title and course_title in normalized_message:
-            matched_notes = list(CourseNote.objects.filter(course=course).order_by('-updated_at'))
-            if matched_notes:
-                return matched_notes[:5]
+            notes = list(CourseNote.objects.filter(course=course).order_by('-updated_at'))
+            if notes:
+                return notes[:5]
 
-    for course in Course.objects.all():
-        notes = list(CourseNote.objects.filter(course=course).order_by('-updated_at'))
-        if not notes:
+    candidates = []
+    for note in CourseNote.objects.select_related('course', 'professor').all():
+        note_prof = normalize_text(note.professor.nom) if note.professor else ""
+        note_course = normalize_text(note.course.titre or "")
+        note_title = normalize_text(note.title or "")
+        search_text = " ".join(
+            [note.title or '', note.content or '', note.course.titre or '', note.professor.nom if note.professor else '']
+        )
+        normalized_note = normalize_text(search_text)
+        score = sum(1 for token in message_tokens if token in normalized_note)
+
+        if note_prof and any(token in note_prof for token in message_tokens):
+            score += 6
+        if note_course and any(token in note_course for token in message_tokens):
+            score += 4
+        if note_title and any(token in note_title for token in message_tokens):
+            score += 3
+        if note_course and note_course in normalized_message:
+            score += 3
+
+        if score > 0:
+            candidates.append((score, note))
+
+    if candidates:
+        candidates.sort(key=lambda item: (-item[0], -item[1].id))
+        return [note for _, note in candidates][:5]
+
+    # Fallback: return recent notes containing any relevant keyword.
+    fallback = []
+    for note in CourseNote.objects.order_by('-updated_at')[:50]:
+        normalized_note = normalize_text(" ".join([note.title or '', note.content or '']))
+        if any(term in normalized_note for term in query_terms):
+            fallback.append(note)
+            if len(fallback) >= 5:
+                break
+
+    return fallback
+
+
+def extract_text_from_course_note_attachment(note):
+    if not note or not getattr(note, 'attachment', None):
+        return ""
+    try:
+        from courses.views import extract_text_from_attachment
+        with note.attachment.open('rb') as attachment_file:
+            return extract_text_from_attachment(attachment_file)
+    except Exception:
+        return ""
+
+
+def build_note_snippet(note, max_length=280):
+    text = (note.content or "").strip()
+    if not text and getattr(note, 'attachment', None):
+        text = extract_text_from_course_note_attachment(note).strip()
+    if not text:
+        return ""
+    if len(text) <= max_length:
+        return text
+    snippet = text[:max_length].rsplit(' ', 1)[0]
+    return snippet + '...'
+
+
+def split_text_units(text):
+    if not text:
+        return []
+    units = []
+    for block in re.split(r'[\n\r]+', text):
+        block = block.strip()
+        if not block:
             continue
-        note_text = " ".join((note.content or "") for note in notes[:3]).lower()
-        if not note_text:
+        for sentence in re.split(r'(?<=[.!?;:])\s+|\n+', block):
+            sentence = sentence.strip()
+            if sentence:
+                units.append(sentence)
+    return units
+
+
+def find_relevant_sentences(notes, question):
+    question_tokens = set(re.findall(r"\w+", normalize_text(question or "")))
+    if not question_tokens:
+        return ""
+
+    units = []
+    for note in notes:
+        text = (note.content or "").strip()
+        if not text and getattr(note, 'attachment', None):
+            text = extract_text_from_course_note_attachment(note).strip()
+        if not text:
             continue
+        units.extend(split_text_units(text))
 
-        score = 0
-        if normalize_text(course.titre) and normalize_text(course.titre) in normalized_message:
-            score += 5
-        for keyword in [
-            'récursivité', 'python', 'algorithme', 'programmation', 'cours', 'définition',
-            'théorie', 'exercice', 'problème', 'concept', 'chapitre', 'variable', 'variables',
-            'fonction', 'fonctions', 'structure', 'donnée', 'données', 'système', 'information',
-            'information', 'quoi', 'explique', 'concepts', 'signification', 'comprendre'
-        ]:
-            if keyword in note_text:
-                score += 2
-        if score >= 2:
-            matched_notes.extend(notes[:2])
+    best_matches = []
+    for unit in units:
+        normalized_unit = normalize_text(unit)
+        score = sum(1 for token in question_tokens if token in normalized_unit)
+        if score > 0:
+            best_matches.append((score, unit.strip()))
 
-    if matched_notes:
-        return matched_notes[:5]
+    if best_matches:
+        best_matches.sort(key=lambda item: (-item[0], len(item[1])))
+        selected = []
+        seen = set()
+        for _, unit in best_matches:
+            if unit not in seen:
+                selected.append(unit)
+                seen.add(unit)
+            if len(selected) >= 2:
+                break
+        return " ".join(selected)
 
-    fallback_notes = list(CourseNote.objects.order_by('-updated_at')[:5])
-    return fallback_notes
+    first_snippet = build_note_snippet(notes[0]) if notes else ""
+    return first_snippet
 
 
-def format_notes_response(notes):
+def get_note_attachment_url(note):
+    if not note or not getattr(note, 'attachment', None):
+        return None
+    try:
+        return note.attachment.url
+    except Exception:
+        return None
+
+
+def format_notes_response(notes, question="", request=None):
     if not notes:
         return ""
     course_title = notes[0].course.titre
     professor_name = notes[0].professor.nom if notes[0].professor else "le professeur concerné"
     course_label = course_title or "ce cours"
     professor_label = professor_name or "le professeur concerné"
-    parts = [
-        f"D’après les notes de {professor_label} pour le cours {course_label}, voici ce qui a été enregistré :"
-    ]
-    for note in notes[:5]:
-        snippet = (note.content or "").strip()
-        if len(snippet) > 220:
-            snippet = snippet[:220].rsplit(' ', 1)[0] + '...'
-        if snippet:
-            parts.append(f"- {note.title}: {snippet}")
-        else:
-            parts.append(f"- {note.title}: contenu à consulter dans la note.")
-    parts.append(
-        f"Si la réponse n'est pas assez précise, je peux aussi vérifier une information externe pour le cours {course_label}."
-    )
-    return "\n".join(parts)
+
+    sentence_answer = find_relevant_sentences(notes, question)
+    attachment_url = get_note_attachment_url(notes[0])
+
+    if sentence_answer:
+        answer = sentence_answer
+        answer += f"\n\nSource : note de cours de {professor_label}."
+        return answer
+
+    first_snippet = build_note_snippet(notes[0])
+    if first_snippet:
+        answer = first_snippet
+    elif attachment_url:
+        answer = (
+            f"Je n'ai pas pu extraire automatiquement le texte de la note du professeur {professor_label} pour le cours {course_label}.\n"
+            f"Je joins le fichier source pour que tu puisses le consulter directement."
+        )
+        return answer
+    else:
+        answer = (
+            f"Je n'ai pas pu extraire automatiquement le texte de la note du professeur {professor_label} pour le cours {course_label}."
+        )
+
+    answer += f"\n\nSource : note de cours de {professor_label}."
+    return answer
 
 
 def get_conversation_message_lines(conversation, max_messages=40):
@@ -189,7 +360,7 @@ def chat_history(request):
                 "id": m.id,
                 "text": m.text,
                 "sender": m.sender,
-                "file": request.build_absolute_uri(m.file.url) if m.file else None,
+                "file": m.file.url if m.file else None,
                 "timestamp": m.timestamp.isoformat()
             }
             for m in messages
@@ -260,7 +431,11 @@ def chatbot_response(request):
     intent_tag = ""
     
     if raw_message:
-        intent_tag, confidence = get_ml_prediction(raw_message)
+        if is_greeting_message(raw_message):
+            intent_tag = "greeting"
+            confidence = 1.0
+        else:
+            intent_tag, confidence = get_ml_prediction(raw_message)
     elif uploaded_file:
         # Forcer le passage au LLM si c'est seulement une image
         confidence = 0 
@@ -279,7 +454,13 @@ def chatbot_response(request):
     # --- COUCHE 2 : LOGIQUE MÉTIER & PERSONNALISATION ---
     if confidence > 0.6:  # Augmenté pour éviter les faux positifs (ex: gitbash)
         # On ne garde que les réponses métiers spécifiques
-        if intent_tag == "student_lookup":
+        if intent_tag == "greeting":
+            user_name = get_user_display_name(request.user)
+            if user_name:
+                reply = f"Bonjour {user_name} ! Comment puis-je t'aider aujourd'hui ?"
+            else:
+                reply = "Bonjour ! Comment puis-je t'aider aujourd'hui ?"
+        elif intent_tag == "student_lookup":
             count = Student.objects.count()
             reply = f"Nous comptons actuellement {count} étudiants inscrits sur la plateforme ! 🎓"
         elif intent_tag == "course_info":
@@ -307,7 +488,7 @@ def chatbot_response(request):
         if matched_course:
             reply = f"Tu parles du cours de {matched_course.titre} ? Il est dispensé par le professeur {matched_course.professeur}."
 
-    # --- COUCHE 3.5 : NOTES DE COURS (PRIORITÉ ABSOLUE) ---
+    # --- COUCHE 3.5 : NOTES DE COURS (PRIORITÉ) ---
     notes_for_message = []
     if raw_message:
         normalized = normalize_text(raw_message)
@@ -315,11 +496,17 @@ def chatbot_response(request):
         if any(keyword in normalized for keyword in note_keywords):
             notes_for_message = find_course_notes_for_message(raw_message)
 
-    if not reply and notes_for_message:
-        reply = format_notes_response(notes_for_message)
+    bot_file = None
+    bot_file_name = None
+    if notes_for_message and (not reply or confidence < 0.6):
+        reply = format_notes_response(notes_for_message, raw_message, request=request)
+        confidence = max(confidence, 0.75)
+        if notes_for_message[0].attachment:
+            bot_file = get_note_attachment_url(notes_for_message[0])
+            bot_file_name = os.path.basename(notes_for_message[0].attachment.name or bot_file)
 
     # --- COUCHE 4 : PRO LLM FALLBACK (Multimodal) ---
-    if not reply or confidence < 0.35 or uploaded_file:
+    if (not reply or confidence < 0.35 or uploaded_file) and not notes_for_message:
         context = f"Etudiant: {student.nom if student else 'Inconnu'}, Niveau: {student.niveau if student else 'N/A'}"
         history_context = build_conversation_prompt_context(conversation)
         
@@ -349,17 +536,25 @@ def chatbot_response(request):
 
     # Sauvegarde de la réponse bot
     if request.user.is_authenticated and conversation:
-        bot_msg = ChatMessage.objects.create(conversation=conversation, user=request.user, text=reply, sender='bot')
+        bot_kwargs = {'conversation': conversation, 'user': request.user, 'text': reply, 'sender': 'bot'}
+        if bot_file and notes_for_message and notes_for_message[0].attachment:
+            bot_kwargs['file'] = notes_for_message[0].attachment
+        bot_msg = ChatMessage.objects.create(**bot_kwargs)
         # Résumé de conversation seulement toutes les 5 réponses du bot (évite un appel LLM à chaque message)
         total_messages = ChatMessage.objects.filter(conversation=conversation, sender='bot').count()
         if total_messages % 5 == 0:
             update_conversation_summary(conversation, student)
 
-    return Response({
+    response_data = {
         "response": reply,
         "conversation_id": conversation.id if conversation else None,
         "conversation_title": conversation.title if conversation else None
-    })
+    }
+    if bot_file:
+        response_data["file"] = bot_file
+        response_data["file_name"] = bot_file_name
+
+    return Response(response_data)
 
 
 @api_view(['GET'])
