@@ -12,6 +12,7 @@ from users.models import Student, Professor, SecretaireFacultaire
 from courses.models import Course, CourseNote
 from .models import ChatMessage, Conversation
 from .ml_model import get_ml_prediction, get_response_by_tag, get_llm_response, summarize_conversation
+from .rag.generation import generate_answer
 
 
 # Charger le modèle français de SpaCy si disponible (évite d'échouer au démarrage)
@@ -37,16 +38,14 @@ def tokenize_text(text):
 
 
 def is_greeting_message(message):
-    normalized = normalize_text(message or "")
-    if not normalized:
+    tokens = tokenize_text(message)
+    if not tokens:
         return False
-    greeting_terms = [
-        'bonjour', 'salut', 'coucou', 'hello', 'bonsoir', 'allo', 'hey', 'yo'
-    ]
-    tokens = normalized.split()
-    if len(tokens) == 1 and tokens[0] in greeting_terms:
-        return True
-    if len(tokens) <= 2 and any(tokens[0] == term for term in greeting_terms):
+    greeting_terms = {
+        'bonjour', 'salut', 'coucou', 'hello', 'bonsoir', 'allo', 'hey', 'yo', 'slt', 'bjr'
+    }
+    # Si le premier mot est une salutation et le message est très court (<= 3 mots)
+    if len(tokens) <= 3 and tokens[0] in greeting_terms:
         return True
     return False
 
@@ -386,20 +385,12 @@ def delete_conversation(request, conv_id):
 @permission_classes([AllowAny])
 def chatbot_response(request):
     raw_message = request.data.get('message', '').strip()
-    uploaded_file = request.FILES.get('file')
     conv_id = request.data.get('conversation_id')
     if conv_id in ['null', 'undefined', '']:
         conv_id = None
     
-    if not raw_message and not uploaded_file:
-        return Response({"error": "Message et fichier vides"}, status=400)
-
-    # Validation des types de fichiers autorisés
-    ALLOWED_EXTENSIONS = ('.pdf',)
-    if uploaded_file:
-        name = uploaded_file.name.lower()
-        if not any(name.endswith(ext) for ext in ALLOWED_EXTENSIONS):
-            return Response({"error": "Type de fichier non autorisé."}, status=400)
+    if not raw_message:
+        return Response({"error": "Message vide"}, status=400)
 
     # Gestion de la conversation
     conversation = None
@@ -412,36 +403,28 @@ def chatbot_response(request):
                 pass
         
         if not conversation:
-            title_text = raw_message if raw_message else "Fichier envoyé"
-            title = title_text[:30] + "..." if len(title_text) > 30 else title_text
+            title = raw_message[:30] + "..." if len(raw_message) > 30 else raw_message
             conversation = Conversation.objects.create(user=request.user, title=title)
         
         msg_obj = ChatMessage.objects.create(
             conversation=conversation, 
             user=request.user, 
-            text=raw_message, 
-            file=uploaded_file,
+            text=raw_message,
             sender='user'
         )
         conversation.save()
 
     # --- COUCHE 1 : MACHINE LEARNING (DÉTECTION D'INTENTION) ---
+    # Note : le chat étudiant n'accepte que du texte — aucun fichier n'est traité ici.
     reply = ""
     confidence = 0
     intent_tag = ""
-    
-    if raw_message:
-        if is_greeting_message(raw_message):
-            intent_tag = "greeting"
-            confidence = 1.0
-        else:
-            intent_tag, confidence = get_ml_prediction(raw_message)
-    elif uploaded_file:
-        # Forcer le passage au LLM si c'est seulement une image
-        confidence = 0 
-    else:
-        reply = "J'ai bien reçu ton fichier ! Peux-tu me préciser ce que tu attends que j'en fasse ?"
+
+    if is_greeting_message(raw_message):
+        intent_tag = "greeting"
         confidence = 1.0
+    else:
+        intent_tag, confidence = get_ml_prediction(raw_message)
 
     # Identification de l'étudiant
     student = None
@@ -488,47 +471,65 @@ def chatbot_response(request):
         if matched_course:
             reply = f"Tu parles du cours de {matched_course.titre} ? Il est dispensé par le professeur {matched_course.professeur}."
 
-    # --- COUCHE 3.5 : NOTES DE COURS (PRIORITÉ) ---
+    bot_file = None
+    bot_file_name = None
+
+    rag_sources = []
+    # --- COUCHE 3.5 : RAG SÉMANTIQUE (PRIORITÉ HAUTE) ---
+    if not reply or confidence < 0.6:
+        print(f"[RAG] Tentative RAG pour : {raw_message[:120]}")
+        rag_answer = generate_answer(raw_message)
+        print(f"[RAG] used_rag={rag_answer.get('used_rag')} sources={rag_answer.get('sources')}")
+
+        if rag_answer.get("used_rag"):
+            reply = rag_answer.get("answer", "").strip()
+            rag_sources = rag_answer.get("sources", [])
+            confidence = 1.0
+
+    # --- COUCHE 4 : NOTES DE COURS PAR MOTS-CLÉS (FALLBACK) ---
+    # Utilisé uniquement si le RAG n'a pas trouvé de réponse pertinente.
     notes_for_message = []
-    if raw_message:
+    if not reply or confidence < 0.6:
         normalized = normalize_text(raw_message)
-        note_keywords = ['cours', 'note', 'notes', 'professeur', 'chapitre', 'examen', 'programme', 'syllabus', 'définition', 'théorie', 'exercice', 'python', 'algorithme', 'programmation', 'récursivité', 'système', 'information', 'quoi', 'explique', 'concept', 'signification', 'comprendre', 'question', 'definition']
+        note_keywords = [
+            'cours', 'note', 'notes', 'professeur', 'chapitre', 'examen', 'programme',
+            'syllabus', 'définition', 'théorie', 'exercice', 'python', 'algorithme',
+            'programmation', 'récursivité', 'système', 'information', 'quoi', 'explique',
+            'concept', 'signification', 'comprendre', 'question', 'definition'
+        ]
         if any(keyword in normalized for keyword in note_keywords):
             notes_for_message = find_course_notes_for_message(raw_message)
 
-    bot_file = None
-    bot_file_name = None
-    if notes_for_message and (not reply or confidence < 0.6):
-        reply = format_notes_response(notes_for_message, raw_message, request=request)
-        confidence = max(confidence, 0.75)
-        if notes_for_message[0].attachment:
-            bot_file = get_note_attachment_url(notes_for_message[0])
-            bot_file_name = os.path.basename(notes_for_message[0].attachment.name or bot_file)
+        if notes_for_message and (not reply or confidence < 0.6):
+            reply = format_notes_response(notes_for_message, raw_message, request=request)
+            confidence = max(confidence, 0.75)
+            if notes_for_message[0].attachment:
+                bot_file = get_note_attachment_url(notes_for_message[0])
+                bot_file_name = os.path.basename(notes_for_message[0].attachment.name or bot_file)
 
-    # --- COUCHE 4 : PRO LLM FALLBACK (Multimodal) ---
-    if (not reply or confidence < 0.35 or uploaded_file) and not notes_for_message:
+    # --- COUCHE 5 : LLM GÉNÉRAL (FALLBACK FINAL) ---
+    # Utilisé si ni le RAG ni les mots-clés n'ont produit de réponse.
+    if not reply or confidence < 0.35:
         context = f"Etudiant: {student.nom if student else 'Inconnu'}, Niveau: {student.niveau if student else 'N/A'}"
         history_context = build_conversation_prompt_context(conversation)
-        
-        # Passer le chemin du fichier à l'IA pour analyse visuelle
-        img_path = msg_obj.file.path if msg_obj and msg_obj.file else None
-        llm_reply = get_llm_response(raw_message, context, history=history_context, image_path=img_path)
-        
+        llm_reply = get_llm_response(raw_message, context, history=history_context)
+
         error_keywords = ["surcharge mentale", "désactivée", "erreur", "difficultés techniques", "vérifier la clé", "clé api"]
         if not any(kw in llm_reply.lower() for kw in error_keywords):
             reply = llm_reply
-            
-            # Sauvegarder dans la base locale (cache)
+            # Sauvegarder dans la base locale (cache ML)
             import hashlib
             from .ml_model import add_new_intent
             tag_hash = hashlib.md5(raw_message.encode('utf-8')).hexdigest()[:8]
             add_new_intent(f"llm_cache_{tag_hash}", [raw_message], [llm_reply])
         else:
-            reply = ("Je n'ai pas bien compris ta question, mais je progresse chaque jour ! 🤖\n\n"
-                    "Tu peux me demander :\n"
-                    "- Voir la liste des cours disponibles\n"
-                    "- Recevoir des conseils d'étude\n"
-                    "- Connaître le nombre d'étudiants")
+            reply = (
+                "Je n'ai pas bien compris ta question, mais je progresse chaque jour ! 🤖\n\n"
+                "Tu peux me demander :\n"
+                "- Voir la liste des cours disponibles\n"
+                "- Recevoir des conseils d'étude\n"
+                "- Connaître le nombre d'étudiants"
+            )
 
     # Nettoyer les éventuelles étoiles résiduelles
     if reply:
@@ -548,7 +549,8 @@ def chatbot_response(request):
     response_data = {
         "response": reply,
         "conversation_id": conversation.id if conversation else None,
-        "conversation_title": conversation.title if conversation else None
+        "conversation_title": conversation.title if conversation else None,
+        "sources": rag_sources
     }
     if bot_file:
         response_data["file"] = bot_file

@@ -218,10 +218,7 @@ class CourseNoteListCreateView(generics.ListCreateAPIView):
                 raise ValidationError({'attachment': 'Type de fichier non autorisé.'})
 
         content_value = serializer.validated_data.get('content') or ''
-        extracted_text = extract_text_from_attachment(attachment)
-        combined_content = "\n\n".join(part for part in [content_value.strip(), extracted_text.strip()] if part)
-
-        serializer.save(professor=professor, content=combined_content)
+        serializer.save(professor=professor, content=content_value.strip())
 
 
 class ProfessorStudentProgressView(APIView):

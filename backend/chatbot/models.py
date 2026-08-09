@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+# Import des modèles RAG pour que Django les reconnaisse dans l'app.
+from .rag.models import CourseDocument, DocumentChunk  # noqa: F401
+
 
 class Conversation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations')

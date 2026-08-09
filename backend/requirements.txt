@@ -6,3 +6,6 @@ psycopg2-binary
 requests
 numpy
 spacy
+chromadb
+pypdf
+python-docx
