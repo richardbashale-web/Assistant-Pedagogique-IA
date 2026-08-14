@@ -1,0 +1,36 @@
+.faculty-selector {
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.faculty-selector label {
+  font-weight: bold;
+  min-width: 100px;
+}
+
+.faculty-selector select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.faculty-selector select:hover {
+  border-color: #999;
+}
+
+.faculty-selector select:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+}
+
+.faculty-selector select option {
+  padding: 5px;
+}
