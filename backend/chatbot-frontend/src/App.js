@@ -10,12 +10,13 @@ import ManageSecretaires from "./ManageSecretaires";
 import ManageGestionnaires from "./ManageGestionnaires";
 import ManageRoles from "./ManageRoles";
 import ManageCourses from "./ManageCourses";
+import Dashboard from "./Dashboard";
 import { getRoleAccess } from "./roleAccess";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 function App() {
-  const [currentView, setCurrentView] = useState("chat");
+  const [currentView, setCurrentView] = useState("dashboard");
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -339,6 +340,11 @@ function App() {
 
           <div className="navbar">
             <button
+              className={`nav-btn ${currentView === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setCurrentView('dashboard')}
+            >📊 Tableau de bord</button>
+
+            <button
               className={`nav-btn ${currentView === 'chat' ? 'active' : ''}`}
               onClick={() => setCurrentView('chat')}
             >💬 Chat IA</button>
@@ -420,6 +426,7 @@ function App() {
         </div>
 
         <div className="content-area">
+          {currentView === 'dashboard' && <Dashboard token={token} />}
           {showStudents && currentView === 'students' && <ManageStudents token={token} />}
           {showProfessors && currentView === 'professors' && <ManageProfessors token={token} />}
           {showSecretaires && currentView === 'secretaires' && <ManageSecretaires token={token} />}

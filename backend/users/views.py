@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth.models import User
 from .permissions import can_manage_users, user_has_role, assign_role_to_user
+from django.db.models import Count
 
 # 📌 Student Views
 class StudentListCreateView(generics.ListCreateAPIView):
@@ -437,3 +438,182 @@ def update_faculty(request, faculty_code):
         'telephone': faculty.telephone,
         'adresse': faculty.adresse,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    """Retourne les statistiques adaptées au rôle de l'utilisateur connecté."""
+    user = request.user
+    try:
+        profile = user.profile
+        role = profile.role.nom if profile.role else None
+    except UserProfile.DoesNotExist:
+        role = None
+
+    is_central = user_has_role(user, 'admin_central') or user.is_superuser
+
+    # ── Admin Central ────────────────────────────────────────────────────────
+    if is_central:
+        total_users = User.objects.count()
+        total_gestionnaires = AdminGestionnaire.objects.count()
+        total_secretaires = SecretaireFacultaire.objects.count()
+        total_professors = Professor.objects.count()
+        total_students = Student.objects.count()
+        total_faculties = Faculty.objects.count()
+        total_roles = Role.objects.count()
+
+        # Répartition étudiants par faculté
+        students_by_faculty = list(
+            Student.objects.values('faculte__nom').annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        professors_by_faculty = list(
+            Professor.objects.values('faculte__nom').annotate(count=Count('id'))
+            .order_by('-count')
+        )
+
+        return Response({
+            'role': 'admin_central',
+            'stats': [
+                {'label': 'Utilisateurs totaux', 'value': total_users, 'icon': '👥', 'color': '#6366f1'},
+                {'label': 'Gestionnaires', 'value': total_gestionnaires, 'icon': '💼', 'color': '#8b5cf6'},
+                {'label': 'Secrétaires', 'value': total_secretaires, 'icon': '📋', 'color': '#06b6d4'},
+                {'label': 'Professeurs', 'value': total_professors, 'icon': '👨‍🏫', 'color': '#10b981'},
+                {'label': 'Étudiants', 'value': total_students, 'icon': '🎓', 'color': '#f59e0b'},
+                {'label': 'Facultés', 'value': total_faculties, 'icon': '🏢', 'color': '#ec4899'},
+            ],
+            'charts': {
+                'students_by_faculty': students_by_faculty,
+                'professors_by_faculty': professors_by_faculty,
+            }
+        })
+
+    # ── Admin Gestionnaire ───────────────────────────────────────────────────
+    if role == 'admin_gestionnaire':
+        gestionnaire = AdminGestionnaire.objects.filter(user=user).first()
+        if gestionnaire:
+            secretaires = SecretaireFacultaire.objects.filter(admin_gestionnaire=gestionnaire)
+            nb_secretaires = secretaires.count()
+            # Facultés distinctes gérées
+            faculties = Faculty.objects.filter(secretaires__admin_gestionnaire=gestionnaire).distinct()
+            nb_faculties = faculties.count()
+            # Professeurs enregistrés par ces secrétaires
+            nb_professors = Professor.objects.filter(enregistre_par__in=secretaires).count()
+
+            secretaires_list = []
+            for sec in secretaires:
+                secretaires_list.append({
+                    'nom': sec.profile.nom_complet or sec.user.username,
+                    'faculte': sec.faculte.nom if sec.faculte else '-',
+                    'nb_professors': Professor.objects.filter(enregistre_par=sec).count(),
+                })
+        else:
+            nb_secretaires = nb_faculties = nb_professors = 0
+            secretaires_list = []
+
+        return Response({
+            'role': 'admin_gestionnaire',
+            'stats': [
+                {'label': 'Mes Secrétaires', 'value': nb_secretaires, 'icon': '📋', 'color': '#06b6d4'},
+                {'label': 'Facultés gérées', 'value': nb_faculties, 'icon': '🏢', 'color': '#6366f1'},
+                {'label': 'Professeurs inscrits', 'value': nb_professors, 'icon': '👨‍🏫', 'color': '#10b981'},
+            ],
+            'charts': {
+                'secretaires': secretaires_list,
+            }
+        })
+
+    # ── Secrétaire Facultaire ────────────────────────────────────────────────
+    if role == 'secretaire_facultaire':
+        secretaire = SecretaireFacultaire.objects.filter(user=user).first()
+        if secretaire:
+            faculte = secretaire.faculte
+            nb_professors = Professor.objects.filter(faculte=faculte).count()
+            from courses.models import Course, CourseNote
+            nb_courses = Course.objects.filter(faculte=faculte).count()
+            nb_students = Student.objects.filter(faculte=faculte).count()
+
+            professors_list = list(
+                Professor.objects.filter(faculte=faculte)
+                .values('nom', 'specialite', 'email')[:10]
+            )
+        else:
+            nb_professors = nb_courses = nb_students = 0
+            professors_list = []
+            faculte = None
+
+        return Response({
+            'role': 'secretaire_facultaire',
+            'faculte': faculte.nom if faculte else '-',
+            'stats': [
+                {'label': 'Professeurs', 'value': nb_professors, 'icon': '👨‍🏫', 'color': '#10b981'},
+                {'label': 'Cours disponibles', 'value': nb_courses, 'icon': '📚', 'color': '#6366f1'},
+                {'label': 'Étudiants inscrits', 'value': nb_students, 'icon': '🎓', 'color': '#f59e0b'},
+            ],
+            'charts': {
+                'professors': professors_list,
+            }
+        })
+
+    # ── Professeur ───────────────────────────────────────────────────────────
+    if role == 'professeur':
+        professor = Professor.objects.filter(user=user).first()
+        if professor:
+            from courses.models import Course, CourseNote
+            nb_courses = Course.objects.filter(professeur=professor).count()
+            nb_notes = CourseNote.objects.filter(professor=professor).count()
+            courses_list = list(
+                Course.objects.filter(professeur=professor)
+                .values('id', 'titre', 'date_creation')[:10]
+            )
+            recent_notes = list(
+                CourseNote.objects.filter(professor=professor)
+                .values('title', 'created_at')[:5]
+            )
+        else:
+            nb_courses = nb_notes = 0
+            courses_list = recent_notes = []
+
+        return Response({
+            'role': 'professeur',
+            'stats': [
+                {'label': 'Mes cours', 'value': nb_courses, 'icon': '📚', 'color': '#6366f1'},
+                {'label': 'Notes publiées', 'value': nb_notes, 'icon': '📝', 'color': '#10b981'},
+            ],
+            'charts': {
+                'courses': courses_list,
+                'recent_notes': recent_notes,
+            }
+        })
+
+    # ── Étudiant ─────────────────────────────────────────────────────────────
+    if role == 'etudiant' or (not role and not user.is_staff):
+        student = Student.objects.filter(user=user).first()
+        from chatbot.models import Conversation
+        nb_conversations = Conversation.objects.filter(user=user).count() if user else 0
+        from courses.models import Course
+        nb_courses = Course.objects.count()  # visible courses
+        if student and student.faculte:
+            nb_courses_faculty = Course.objects.filter(faculte=student.faculte).count()
+        else:
+            nb_courses_faculty = 0
+
+        return Response({
+            'role': 'etudiant',
+            'student': {
+                'nom': student.nom if student else user.username,
+                'niveau': student.niveau if student else '-',
+                'faculte': student.faculte.nom if student and student.faculte else '-',
+                'matricule': student.matricule if student else '-',
+            },
+            'stats': [
+                {'label': 'Conversations IA', 'value': nb_conversations, 'icon': '💬', 'color': '#6366f1'},
+                {'label': 'Cours disponibles', 'value': nb_courses, 'icon': '📚', 'color': '#10b981'},
+                {'label': 'Cours de ma faculté', 'value': nb_courses_faculty, 'icon': '🏢', 'color': '#f59e0b'},
+            ],
+            'charts': {}
+        })
+
+    # Fallback
+    return Response({'role': role or 'unknown', 'stats': [], 'charts': {}})

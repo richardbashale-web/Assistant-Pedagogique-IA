@@ -5,7 +5,8 @@ from .views import (
     CurrentUserView, initialize_roles, list_roles, user_role, assign_role,
     list_users_by_role, create_admin_gestionnaire, create_secretaire,
     list_professors, list_students, list_faculties, get_faculty,
-    get_faculty_professors, get_faculty_students, update_faculty
+    get_faculty_professors, get_faculty_students, update_faculty,
+    dashboard_stats
 )
 
 urlpatterns = [
@@ -37,5 +38,8 @@ urlpatterns = [
     path('faculties/<str:faculty_code>/update/', update_faculty, name='update_faculty'),
     path('faculties/<str:faculty_code>/professors/', get_faculty_professors, name='get_faculty_professors'),
     path('faculties/<str:faculty_code>/students/', get_faculty_students, name='get_faculty_students'),
+
+    # Dashboard stats (basé sur le rôle)
+    path('dashboard/stats/', dashboard_stats, name='dashboard_stats'),
 ]
 
