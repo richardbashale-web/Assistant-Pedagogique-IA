@@ -18,11 +18,13 @@ def build_prompt(question: str, chunks: List[Dict[str, Any]]) -> str:
         context_text = "Aucun contexte pertinent n'a été trouvé dans les supports de cours."
 
     return (
-        "Tu es un assistant pédagogique universitaire. Réponds uniquement à partir du contexte fourni ci-dessous. "
-        "Si l'information n'est pas présente dans ce contexte, dis-le explicitement et ne fais pas d'hypothèse. "
-        "Ne prétends pas avoir lu un support si aucun contexte n'a été trouvé.\n\n"
-        f"Question de l'étudiant : {question}\n\n"
-        f"Contexte fourni :\n{context_text}\n\nRéponse :"
+        "Tu es un assistant pédagogique universitaire. "
+        "Voici un contexte extrait des notes de cours pour répondre à la question.\n\n"
+        f"Contexte fourni :\n{context_text}\n\n"
+        "Instructions :\n"
+        "1. Si tu trouves la réponse dans le contexte fourni, réponds en utilisant CES informations, et ajoute OBLIGATOIREMENT le texte '[SOURCE_USED]' à la toute fin de ta réponse.\n"
+        "2. Si l'information N'EST PAS dans le contexte, ignore le contexte et réponds de manière claire en utilisant tes connaissances générales. Dans ce cas, NE METS PAS '[SOURCE_USED]' à la fin.\n\n"
+        f"Question de l'étudiant : {question}\n\nRéponse :"
     )
 
 
@@ -46,17 +48,34 @@ def generate_answer(question: str, top_k: int = 4, threshold: float = 0.35, cour
         sources = []
         for chunk in relevant_chunks:
             metadata = chunk.get("metadata", {}) or {}
-            label = metadata.get("document_title") or metadata.get("source") or "support de cours"
+            doc_title = metadata.get("document_title") or metadata.get("source") or "document"
+            course_title = metadata.get("course_title")
+            prof_name = metadata.get("professor_name")
+            
+            if course_title:
+                label = f"{doc_title} (Cours : {course_title})"
+            elif prof_name:
+                label = f"{doc_title} (Prof : {prof_name})"
+            else:
+                label = doc_title
+                
             sources.append(label)
+            
         unique_sources = list(dict.fromkeys(sources))
+        
+        # Only return the top 1 source to avoid cluttering the UI
+        primary_source = unique_sources[:1]
+        
         answer = llm_text.strip()
-        if unique_sources:
-            answer = f"{answer}\n\nSource : {', '.join(unique_sources)}"
-        return {"answer": answer, "sources": unique_sources, "used_rag": True}
+        
+        if "[SOURCE_USED]" in answer:
+            answer = answer.replace("[SOURCE_USED]", "").strip()
+            return {"answer": answer, "sources": primary_source, "used_rag": True}
+        else:
+            return {"answer": answer, "sources": [], "used_rag": False}
 
     prompt = (
-        "Tu es un assistant pédagogique universitaire. Réponds à la question ci-dessous avec tes connaissances générales. "
-        "Précise clairement que la réponse ne provient pas d'un support de cours et que tu réponds de façon générale.\n\n"
+        "Tu es un assistant pédagogique universitaire. Réponds à la question ci-dessous de manière claire avec tes connaissances générales.\n\n"
         f"Question : {question}\n\nRéponse :"
     )
     llm_text = _gemini_generate_text([{"text": prompt}]) or "Je n'ai pas pu générer une réponse pour le moment."

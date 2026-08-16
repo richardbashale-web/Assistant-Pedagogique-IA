@@ -27,8 +27,6 @@ function App() {
   const [loggedUser, setLoggedUser] = useState("");
   const [userRole, setUserRole] = useState(null);
   const [userRoleDisplay, setUserRoleDisplay] = useState("");
-  const [courses, setCourses] = useState([]);
-  const [selectedCourseId, setSelectedCourseId] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -45,6 +43,7 @@ function App() {
     setUserRole(null);
     setUserRoleDisplay("");
     setLoggedUser("");
+    setCurrentView("dashboard");
   }, []);
 
   const fetchUserInfo = useCallback(async () => {
@@ -102,20 +101,6 @@ function App() {
     }
   }, [token, handleLogout]);
 
-  const fetchCourses = useCallback(async () => {
-    if (!token) return;
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/courses/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCourses(data);
-      }
-    } catch (error) {
-      console.error("Erreur chargement des cours:", error);
-    }
-  }, [token, selectedCourseId]);
 
   const fetchHistory = useCallback(async (convId) => {
     if (!token || !convId) return;
@@ -140,10 +125,8 @@ function App() {
     if (token) {
       fetchUserInfo();
       fetchConversations();
-      fetchCourses();
     }
-  }, [token, fetchConversations, fetchUserInfo, fetchCourses]);
-
+  }, [token, fetchConversations, fetchUserInfo]);
   useEffect(() => {
     if (activeConversationId) {
       fetchHistory(activeConversationId);
@@ -182,7 +165,7 @@ function App() {
         questionData.append("conversation_id", activeConversationId);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/chatbot_response/`, {
+      const response = await fetch(`${API_BASE_URL}/api/chatbot/`, {
         method: "POST",
         headers: {
           ...(token && { "Authorization": `Bearer ${token}` })
@@ -292,48 +275,52 @@ function App() {
 
   return (
     <div className="app-layout">
-      <div className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
-        {/* Bouton toggle sidebar */}
-        <button
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarCollapsed(prev => !prev)}
-          title={sidebarCollapsed ? 'Afficher l\'historique' : 'Réduire l\'historique'}
-          aria-label={sidebarCollapsed ? 'Ouvrir la sidebar' : 'Fermer la sidebar'}
-        >
-          {sidebarCollapsed ? '▶' : '◀'}
-        </button>
 
-        <div className="sidebar-inner">
-          <div className="sidebar-header">
-            <button className="new-chat-btn" onClick={createNewChat}>
-              <span>+</span> Nouvelle discussion
-            </button>
-          </div>
-          <div className="history-list">
-            {conversations.map(conv => (
-              <div
-                key={conv.id}
-                className={`history-item ${activeConversationId === conv.id ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveConversationId(conv.id);
-                  setCurrentView("chat");
-                }}
-              >
-                <div className="history-title">{conv.title}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="history-date">{conv.updated_at}</span>
-                  <button
-                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                    onClick={(e) => deleteConversation(e, conv.id)}
-                    title="Supprimer la discussion"
-                  >🗑️</button>
+
+      {/* ── Historique du Chat (visible uniquement si le chat est ouvert) ── */}
+      {currentView === 'chat' && (
+        <div className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
+          <button
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarCollapsed(prev => !prev)}
+            title={sidebarCollapsed ? 'Afficher l\'historique' : 'Réduire l\'historique'}
+            aria-label={sidebarCollapsed ? 'Ouvrir la sidebar' : 'Fermer la sidebar'}
+          >
+            {sidebarCollapsed ? '▶' : '◀'}
+          </button>
+
+          <div className="sidebar-inner">
+            <div className="sidebar-header">
+              <button className="new-chat-btn" onClick={createNewChat}>
+                <span>+</span> Nouvelle discussion
+              </button>
+            </div>
+            <div className="history-list">
+              {conversations.map(conv => (
+                <div
+                  key={conv.id}
+                  className={`history-item ${activeConversationId === conv.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveConversationId(conv.id);
+                  }}
+                >
+                  <div className="history-title">{conv.title}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="history-date">{conv.updated_at}</span>
+                    <button
+                      style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                      onClick={(e) => deleteConversation(e, conv.id)}
+                      title="Supprimer la discussion"
+                    >🗑️</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
+      {/* ── Contenu Principal ── */}
       <div className="main-content">
         <div className="header">
           <h2 className="title">Assistant Pédagogique IA</h2>
@@ -343,11 +330,6 @@ function App() {
               className={`nav-btn ${currentView === 'dashboard' ? 'active' : ''}`}
               onClick={() => setCurrentView('dashboard')}
             >📊 Tableau de bord</button>
-
-            <button
-              className={`nav-btn ${currentView === 'chat' ? 'active' : ''}`}
-              onClick={() => setCurrentView('chat')}
-            >💬 Chat IA</button>
 
             {showFaculties && (
               <button
@@ -532,6 +514,15 @@ function App() {
           )}
         </div>
       </div>
+
+      {/* ── Bouton Flottant (FAB) Chat IA ── */}
+      <button 
+        className={`fab-chat ${currentView === 'chat' ? 'active' : ''}`}
+        onClick={() => setCurrentView(currentView === 'chat' ? 'dashboard' : 'chat')}
+        title="Ouvrir le Chat IA"
+      >
+        <span className="fab-icon">💬</span>
+      </button>
     </div>
   );
 }

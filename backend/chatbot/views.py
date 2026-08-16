@@ -37,15 +37,16 @@ def tokenize_text(text):
     return [token for token in re.findall(r"\w+", normalized) if token]
 
 
-def is_greeting_message(message):
+def is_conversational_message(message):
     tokens = tokenize_text(message)
     if not tokens:
         return False
-    greeting_terms = {
-        'bonjour', 'salut', 'coucou', 'hello', 'bonsoir', 'allo', 'hey', 'yo', 'slt', 'bjr'
+    conversational_terms = {
+        'bonjour', 'salut', 'coucou', 'hello', 'bonsoir', 'allo', 'hey', 'yo', 'slt', 'bjr',
+        'merci', 'ok', 'daccord', 'super', 'genial', 'au', 'revoir', 'bye', 'a', 'plus', 'top'
     }
-    # Si le premier mot est une salutation et le message est très court (<= 3 mots)
-    if len(tokens) <= 3 and tokens[0] in greeting_terms:
+    # Si le premier mot est un terme conversationnel et le message est court (<= 4 mots)
+    if len(tokens) <= 4 and (tokens[0] in conversational_terms or any(t in conversational_terms for t in tokens)):
         return True
     return False
 
@@ -420,11 +421,16 @@ def chatbot_response(request):
     confidence = 0
     intent_tag = ""
 
-    if is_greeting_message(raw_message):
-        intent_tag = "greeting"
+    if is_conversational_message(raw_message):
+        intent_tag = "conversational"
         confidence = 1.0
     else:
         intent_tag, confidence = get_ml_prediction(raw_message)
+        # Éviter que "qui est jul" ou "qui est cr7" soit pris pour une question sur l'identité du bot
+        if confidence > 0.6 and "qui est" in raw_message.lower():
+            if not any(kw in raw_message.lower() for kw in ["tu", "ton nom", "t'es", "assistant", "bot", "ia"]):
+                confidence = 0
+                intent_tag = ""
 
     # Identification de l'étudiant
     student = None
@@ -437,12 +443,15 @@ def chatbot_response(request):
     # --- COUCHE 2 : LOGIQUE MÉTIER & PERSONNALISATION ---
     if confidence > 0.6:  # Augmenté pour éviter les faux positifs (ex: gitbash)
         # On ne garde que les réponses métiers spécifiques
-        if intent_tag == "greeting":
+        if intent_tag == "conversational":
             user_name = get_user_display_name(request.user)
-            if user_name:
-                reply = f"Bonjour {user_name} ! Comment puis-je t'aider aujourd'hui ?"
+            lower_msg = raw_message.lower()
+            if 'merci' in lower_msg:
+                reply = "De rien ! N'hésite pas si tu as d'autres questions."
+            elif 'au revoir' in lower_msg or 'bye' in lower_msg:
+                reply = f"À bientôt {user_name or ''} ! Bonne journée."
             else:
-                reply = "Bonjour ! Comment puis-je t'aider aujourd'hui ?"
+                reply = f"Bonjour {user_name or ''} ! Comment puis-je t'aider aujourd'hui ?"
         elif intent_tag == "student_lookup":
             count = Student.objects.count()
             reply = f"Nous comptons actuellement {count} étudiants inscrits sur la plateforme ! 🎓"
@@ -481,7 +490,7 @@ def chatbot_response(request):
         rag_answer = generate_answer(raw_message)
         print(f"[RAG] used_rag={rag_answer.get('used_rag')} sources={rag_answer.get('sources')}")
 
-        if rag_answer.get("used_rag"):
+        if rag_answer.get("answer"):
             reply = rag_answer.get("answer", "").strip()
             rag_sources = rag_answer.get("sources", [])
             confidence = 1.0
