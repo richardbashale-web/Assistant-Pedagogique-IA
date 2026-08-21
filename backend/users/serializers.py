@@ -1,29 +1,26 @@
 from rest_framework import serializers
 from .models import Student, Professor
-from django.utils import timezone
-import random
-
-
-def generate_matricule():
-    """Génère un matricule unique au format ETU-YYYY-XXXX"""
-    year = timezone.now().year
-    while True:
-        number = random.randint(1000, 9999)
-        matricule = f"ETU-{year}-{number}"
-        if not Student.objects.filter(matricule=matricule).exists():
-            return matricule
 
 
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = '__all__'
+        # matricule est obligatoire (non auto-génér\u00e9), mais on tolère qu'il
+        # soit absent lors d'une mise à jour partielle (PATCH).
+        extra_kwargs = {
+            'matricule': {'required': True},
+        }
 
-    def create(self, validated_data):
-        # Génération automatique du matricule si non fourni ou vide
-        if not validated_data.get('matricule'):
-            validated_data['matricule'] = generate_matricule()
-        return super().create(validated_data)
+    def validate_matricule(self, value):
+        """Vérifie que le matricule n'est pas déjà utilisé par un autre étudiant."""
+        qs = Student.objects.filter(matricule=value)
+        # En mode update, exclure l'instance courante
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Ce matricule est déjà attribué à un autre étudiant.")
+        return value
 
 
 class ProfessorSerializer(serializers.ModelSerializer):

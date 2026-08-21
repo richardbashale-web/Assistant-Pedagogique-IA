@@ -8,6 +8,9 @@ from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth.models import User
 from .permissions import can_manage_users, user_has_role, assign_role_to_user
 from django.db.models import Count
+from django.db import transaction
+import io
+import csv
 
 # 📌 Student Views
 class StudentListCreateView(generics.ListCreateAPIView):
@@ -43,6 +46,213 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Accès refusé.")
         instance.delete()
+
+
+# 📌 Import en masse des étudiants
+class StudentImportView(APIView):
+    """
+    POST /api/students/import/
+    Importe une liste d'étudiants depuis un fichier .xlsx ou .csv.
+    Champs attendus dans le fichier : matricule, nom, post_nom, prenom, sexe
+    Body (multipart/form-data) : file, faculty_id, promotion, academic_year
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not (request.user.is_staff or can_manage_users(request.user)):
+            return Response({'error': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
+
+        uploaded_file = request.FILES.get('file')
+        faculty_id = request.data.get('faculty_id')
+        promotion = request.data.get('promotion')
+        academic_year = request.data.get('academic_year')
+
+        if not uploaded_file:
+            return Response({'error': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not faculty_id:
+            return Response({'error': 'faculty_id est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not promotion:
+            return Response({'error': 'La promotion est requise.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not academic_year:
+            return Response({'error': "L'année académique est requise."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            faculty = Faculty.objects.get(code=faculty_id)
+        except Faculty.DoesNotExist:
+            return Response({'error': 'Faculté introuvable.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- Lecture du fichier ---
+        filename = uploaded_file.name.lower()
+        try:
+            rows = self._parse_file(uploaded_file, filename)
+        except Exception as e:
+            return Response({'error': f'Impossible de lire le fichier : {e}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- Traitement ligne par ligne ---
+        created_count = 0
+        errors = []
+
+        with transaction.atomic():
+            for i, row in enumerate(rows, start=2):  # ligne 2 car la ligne 1 est l'en-tête
+                sp = transaction.savepoint()
+                try:
+                    result = self._process_row(row, i, faculty, promotion, academic_year)
+                    if result.get('error'):
+                        errors.append({'line': i, 'reason': result['error'], 'data': result.get('data', {})})
+                        transaction.savepoint_rollback(sp)
+                    else:
+                        created_count += 1
+                        transaction.savepoint_commit(sp)
+                except Exception as e:
+                    transaction.savepoint_rollback(sp)
+                    errors.append({'line': i, 'reason': str(e), 'data': {}})
+
+        return Response({
+            'total_lines': len(rows),
+            'created': created_count,
+            'errors_count': len(errors),
+            'errors': errors,
+        }, status=status.HTTP_200_OK)
+
+    def _parse_file(self, uploaded_file, filename):
+        """Lit le fichier et retourne une liste de dicts normalisés."""
+        if filename.endswith('.xlsx'):
+            return self._parse_xlsx(uploaded_file)
+        elif filename.endswith('.csv'):
+            return self._parse_csv(uploaded_file)
+        else:
+            raise ValueError('Format de fichier non supporté. Utilisez .xlsx ou .csv')
+
+    def _parse_xlsx(self, uploaded_file):
+        try:
+            import openpyxl
+        except ImportError:
+            raise ImportError('openpyxl est requis pour lire les fichiers .xlsx. Installez-le avec : pip install openpyxl')
+
+        wb = openpyxl.load_workbook(uploaded_file, read_only=True, data_only=True)
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        headers = [str(h).strip().lower() if h else '' for h in next(rows_iter)]
+        rows = []
+        for row in rows_iter:
+            if all(v is None or str(v).strip() == '' for v in row):
+                continue  # ignorer les lignes vides
+            rows.append(dict(zip(headers, [str(v).strip() if v is not None else '' for v in row])))
+        return rows
+
+    def _parse_csv(self, uploaded_file):
+        content = uploaded_file.read().decode('utf-8-sig')  # utf-8-sig gère le BOM Excel
+        reader = csv.DictReader(io.StringIO(content))
+        # Normaliser les noms de colonnes
+        rows = []
+        for row in reader:
+            normalized = {k.strip().lower(): (v.strip() if v else '') for k, v in row.items()}
+            rows.append(normalized)
+        return rows
+
+    def _process_row(self, row, line_num, faculty, promotion, academic_year):
+        """Traite une ligne du fichier et crée User + UserProfile + Student."""
+        # Mapper les variantes de noms de colonnes
+        matricule = (row.get('matricule') or '').strip()
+        nom = (row.get('nom') or '').strip()
+        post_nom = (row.get('post-nom') or row.get('post_nom') or row.get('postnom') or '').strip()
+        prenom = (row.get('prenom') or row.get('prénom') or '').strip()
+        sexe = (row.get('sexe') or '').strip().upper()
+
+        # Validation des champs obligatoires
+        if not matricule:
+            return {'error': 'Matricule manquant.', 'data': row}
+        if not nom:
+            return {'error': 'Nom manquant.', 'data': row}
+        if sexe not in ('M', 'F', ''):
+            return {'error': f'Sexe invalide : "{sexe}". Attendu M ou F.', 'data': row}
+
+        # Vérification des doublons de matricule
+        if Student.objects.filter(matricule=matricule).exists():
+            return {'error': f'Matricule "{matricule}" déjà existant.', 'data': row}
+
+        # Construction du nom complet (nom + post-nom + prénom)
+        nom_complet_parts = [p for p in [nom, post_nom, prenom] if p]
+        nom_complet = ' '.join(nom_complet_parts)
+
+        # Génération de l'email fictif à partir du matricule
+        email_base = matricule.lower().replace(' ', '-')
+        email = f'{email_base}@uwb.edu'
+        # En cas de collision d'email (rare mais possible)
+        if User.objects.filter(email=email).exists() or Student.objects.filter(email=email).exists():
+            email = f'{email_base}-{line_num}@uwb.edu'
+
+        # Création du username Django (matricule)
+        username = matricule.lower().replace(' ', '-')
+        if User.objects.filter(username=username).exists():
+            username = f'{username}-{line_num}'
+
+        # Création du compte User avec mot de passe temporaire uwb@1234
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password='uwb@1234',
+            first_name=prenom,
+            last_name=f'{nom} {post_nom}'.strip(),
+        )
+
+        # Création du UserProfile
+        profile = UserProfile.objects.create(
+            user=user,
+            nom_complet=nom_complet,
+            est_actif=True,
+        )
+        assign_role_to_user(user, 'etudiant')
+
+        # Création de l'étudiant
+        Student.objects.create(
+            user=user,
+            profile=profile,
+            nom=nom_complet,
+            email=email,
+            niveau=promotion,
+            matricule=matricule,
+            faculte=faculty,
+            academic_year=academic_year,
+            is_active=True,
+        )
+
+        return {'success': True}
+
+
+# 📌 Activer / Désactiver un étudiant
+class StudentToggleActiveView(APIView):
+    """
+    PATCH /api/students/<id>/toggle-active/
+    Inverse l'état is_active de l'étudiant et du User Django lié.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not (request.user.is_staff or can_manage_users(request.user)):
+            return Response({'error': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            student = Student.objects.select_related('user').get(pk=pk)
+        except Student.DoesNotExist:
+            return Response({'error': 'Étudiant introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        new_state = not student.is_active
+        student.is_active = new_state
+        student.save(update_fields=['is_active'])
+
+        # Synchroniser avec User.is_active (bloque l'authentification JWT)
+        if student.user:
+            student.user.is_active = new_state
+            student.user.save(update_fields=['is_active'])
+
+        action = 'activé' if new_state else 'désactivé'
+        return Response({
+            'id': student.pk,
+            'is_active': new_state,
+            'message': f"L'étudiant a été {action} avec succès.",
+        })
+
 
 # 📌 Professor Views
 class ProfessorListCreateView(generics.ListCreateAPIView):

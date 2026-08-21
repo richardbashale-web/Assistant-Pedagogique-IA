@@ -186,8 +186,11 @@ class Student(models.Model):
     nom = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     niveau = models.CharField(max_length=50)
-    matricule = models.CharField(max_length=50, blank=True)
+    # matricule est maintenant saisi manuellement (plus d'auto-génération)
+    matricule = models.CharField(max_length=50, unique=True)
     faculte = models.ForeignKey(Faculty, on_delete=models.PROTECT, related_name='etudiants', null=True)
+    academic_year = models.CharField(max_length=20, blank=True, verbose_name="Année académique")
+    is_active = models.BooleanField(default=True, verbose_name="Compte actif")
     date_inscription = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True)
 

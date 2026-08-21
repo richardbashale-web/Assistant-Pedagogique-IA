@@ -9,3 +9,5 @@ spacy
 chromadb
 pypdf
 python-docx
+openpyxl
+pandas

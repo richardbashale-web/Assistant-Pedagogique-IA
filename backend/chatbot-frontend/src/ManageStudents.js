@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import FacultySelector from "./FacultySelector";
 import { useToast } from "./Toast";
+import ImportStudentsModal from "./ImportStudentsModal";
 
 function ManageStudents({ token }) {
   const [students, setStudents] = useState([]);
@@ -13,6 +14,8 @@ function ManageStudents({ token }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [search, setSearch] = useState("");
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [togglingId, setTogglingId] = useState(null); // id en cours de toggle
   const { toastContainer, showToast } = useToast();
 
   const API_URL = "http://127.0.0.1:8000/api/students/";
@@ -41,6 +44,7 @@ function ManageStudents({ token }) {
   const handleSubmit = async () => {
     if (!faculte) { showToast("Veuillez sélectionner une faculté.", "error"); return; }
     if (!nom || !email || !niveau) { showToast("Nom, email et niveau sont obligatoires.", "error"); return; }
+    if (!matricule) { showToast("Le matricule est obligatoire.", "error"); return; }
     setLoading(true);
     const method = editingId ? "PUT" : "POST";
     const url = editingId ? `${API_URL}${editingId}/` : API_URL;
@@ -56,7 +60,9 @@ function ManageStudents({ token }) {
         fetchStudents();
       } else {
         const error = await res.json();
-        showToast(`Erreur : ${error.detail || "Opération impossible."}`, "error");
+        // Afficher le message d'erreur spécifique (ex: matricule déjà existant)
+        const msg = error.matricule?.[0] || error.email?.[0] || error.detail || "Opération impossible.";
+        showToast(`Erreur : ${msg}`, "error");
       }
     } catch { showToast("Erreur réseau.", "error"); }
     finally { setLoading(false); }
@@ -81,6 +87,30 @@ function ManageStudents({ token }) {
     } catch { showToast("Erreur réseau.", "error"); }
   };
 
+  const toggleStudentActive = async (student) => {
+    const action = student.is_active ? "désactiver" : "activer";
+    if (!window.confirm(`Voulez-vous vraiment ${action} cet étudiant ?\n\n"${student.nom}"`)) return;
+    setTogglingId(student.id);
+    try {
+      const res = await fetch(`${API_URL}${student.id}/toggle-active/`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message, "success");
+        // Mise à jour locale immédiate sans recharger tout le tableau
+        setStudents((prev) =>
+          prev.map((s) => s.id === student.id ? { ...s, is_active: data.is_active } : s)
+        );
+      } else {
+        const err = await res.json();
+        showToast(err.error || "Erreur lors du changement d'état.", "error");
+      }
+    } catch { showToast("Erreur réseau.", "error"); }
+    finally { setTogglingId(null); }
+  };
+
   const filtered = students.filter(s =>
     `${s.nom} ${s.email} ${s.matricule} ${s.niveau}`.toLowerCase().includes(search.toLowerCase())
   );
@@ -88,18 +118,49 @@ function ManageStudents({ token }) {
   return (
     <div className="page-section">
       {toastContainer}
+
+      {/* Modal import */}
+      {showImportModal && (
+        <ImportStudentsModal
+          token={token}
+          onClose={() => setShowImportModal(false)}
+          onImportDone={() => { fetchStudents(); }}
+        />
+      )}
+
+      {/* En-tête */}
       <div className="section-header">
         <div>
           <h2>Gestion des Étudiants 🎓</h2>
           <p>{editingId ? "Modifiez les informations de l'étudiant sélectionné." : "Enregistrez et gérez les comptes des étudiants de votre faculté."}</p>
         </div>
+        <button
+          onClick={() => setShowImportModal(true)}
+          style={{
+            background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))",
+            border: "1px solid rgba(99,102,241,0.35)",
+            borderRadius: "12px",
+            color: "#a5b4fc",
+            padding: "10px 18px",
+            cursor: "pointer",
+            fontSize: "13px",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            transition: "all 0.2s",
+          }}
+        >
+          📥 Importer des étudiants
+        </button>
       </div>
 
+      {/* Formulaire ajout / modification */}
       <div className="card notes-card">
         <div className="form-grid">
           <label className="field-label">
             Nom complet *
-            <input placeholder="Ex: Alice Smith" value={nom} onChange={e => setNom(e.target.value)} disabled={loading} />
+            <input placeholder="Ex: Alice Kabongo Mbeki" value={nom} onChange={e => setNom(e.target.value)} disabled={loading} />
           </label>
           <label className="field-label">
             Adresse email *
@@ -110,14 +171,13 @@ function ManageStudents({ token }) {
             <input placeholder="Ex: L1, L2, Master 1..." value={niveau} onChange={e => setNiveau(e.target.value)} disabled={loading} />
           </label>
           <label className="field-label">
-            Numéro de Matricule
+            Numéro de Matricule *
             <input
-              placeholder={editingId ? "Ex: ETU-2026-1234" : "Généré automatiquement (ETU-2026-XXXX)"}
+              placeholder="Ex: ETU-2026-1234 (obligatoire)"
               value={matricule}
               onChange={e => setMatricule(e.target.value)}
-              disabled={loading || !editingId}
-              style={!editingId ? { opacity: 0.55, cursor: 'not-allowed', fontStyle: 'italic' } : {}}
-              title={!editingId ? "Le matricule sera généré automatiquement lors de la création" : "Modifier le matricule"}
+              disabled={loading}
+              title="Saisissez le matricule fourni par l'université"
             />
           </label>
 
@@ -136,6 +196,7 @@ function ManageStudents({ token }) {
         </div>
       </div>
 
+      {/* Liste */}
       <div className="section-header section-header-tight">
         <h3>Étudiants existants ({filtered.length})</h3>
         <input
@@ -155,14 +216,20 @@ function ManageStudents({ token }) {
           <table className="progress-table">
             <thead>
               <tr>
-                <th>Nom complet</th><th>Matricule</th><th>Niveau</th><th>Email</th><th>Faculté</th><th style={{ textAlign: "center" }}>Actions</th>
+                <th>Nom complet</th>
+                <th>Matricule</th>
+                <th>Niveau</th>
+                <th>Email</th>
+                <th>Faculté</th>
+                <th style={{ textAlign: "center" }}>Statut</th>
+                <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id} style={editingId === s.id ? { background: "rgba(99,102,241,0.08)" } : {}}>
                   <td style={{ fontWeight: 600 }}>{s.nom}</td>
-                  <td>{s.matricule || "-"}</td>
+                  <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{s.matricule || "-"}</td>
                   <td>{s.niveau}</td>
                   <td>{s.email}</td>
                   <td>
@@ -170,10 +237,60 @@ function ManageStudents({ token }) {
                       {s.faculte}
                     </span>
                   </td>
+                  {/* Colonne Statut */}
                   <td style={{ textAlign: "center" }}>
+                    {s.is_active !== false ? (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: "5px",
+                        padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700,
+                        background: "rgba(16,185,129,0.12)", color: "#34d399",
+                        border: "1px solid rgba(16,185,129,0.25)"
+                      }}>
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#34d399", display: "inline-block" }}></span>
+                        Actif
+                      </span>
+                    ) : (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: "5px",
+                        padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700,
+                        background: "rgba(239,68,68,0.1)", color: "#f87171",
+                        border: "1px solid rgba(239,68,68,0.2)"
+                      }}>
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f87171", display: "inline-block" }}></span>
+                        Inactif
+                      </span>
+                    )}
+                  </td>
+                  {/* Colonne Actions */}
+                  <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                    {/* Modifier */}
                     <button onClick={() => editStudent(s)}
-                      style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "8px", padding: "6px 10px", marginRight: "8px", cursor: "pointer", color: "#a5b4fc" }}
+                      style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "8px", padding: "6px 10px", marginRight: "6px", cursor: "pointer", color: "#a5b4fc" }}
                       title="Modifier l'étudiant">✏️ Modifier</button>
+
+                    {/* Activer / Désactiver */}
+                    <button
+                      onClick={() => toggleStudentActive(s)}
+                      disabled={togglingId === s.id}
+                      style={{
+                        background: s.is_active !== false
+                          ? "rgba(245,158,11,0.1)"
+                          : "rgba(16,185,129,0.1)",
+                        border: `1px solid ${s.is_active !== false ? "rgba(245,158,11,0.25)" : "rgba(16,185,129,0.25)"}`,
+                        borderRadius: "8px", padding: "6px 10px", marginRight: "6px",
+                        cursor: togglingId === s.id ? "not-allowed" : "pointer",
+                        color: s.is_active !== false ? "#fbbf24" : "#34d399",
+                        opacity: togglingId === s.id ? 0.5 : 1,
+                        fontSize: "12px", fontWeight: 600,
+                      }}
+                      title={s.is_active !== false ? "Désactiver l'étudiant" : "Réactiver l'étudiant"}
+                    >
+                      {togglingId === s.id
+                        ? "..."
+                        : s.is_active !== false ? "🔒 Désactiver" : "🔓 Activer"}
+                    </button>
+
+                    {/* Supprimer */}
                     <button onClick={() => deleteStudent(s.id)}
                       style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", color: "#f87171" }}
                       title="Supprimer l'étudiant">🗑️</button>
