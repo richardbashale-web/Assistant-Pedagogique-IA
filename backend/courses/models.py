@@ -3,10 +3,13 @@ from django.db import models
 class Course(models.Model):
     titre = models.CharField(max_length=200)
     description = models.TextField()
-    professeur = models.ForeignKey('users.Professor',
-    on_delete=models.CASCADE,
-    related_name='courses'
-)
+    professeur = models.ForeignKey(
+        'users.Professor',
+        on_delete=models.CASCADE,
+        related_name='courses',
+        null=True,
+        blank=True,
+    )
     faculte = models.ForeignKey('users.Faculty', on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
     promotions = models.JSONField(default=list, blank=True)
     date_creation = models.DateTimeField(auto_now_add=True)

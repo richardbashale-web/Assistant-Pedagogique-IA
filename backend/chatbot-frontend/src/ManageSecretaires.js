@@ -84,7 +84,7 @@ function ManageSecretaires({ token }) {
       <div className="section-header">
         <div>
           <h2>Créer un Secrétaire Facultaire 📋</h2>
-          <p>Enregistrez un secrétaire pour gérer les professeurs et étudiants d'une faculté spécifique.</p>
+          <p>Enregistrez un secrétaire pour gérer les enseignants et étudiants d'une faculté spécifique.</p>
         </div>
       </div>
 

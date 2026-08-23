@@ -16,7 +16,7 @@ export const getRoleAccess = ({ userRole, isAdmin, isProfessor: isProfessorFlag 
     canManageSecretaires: isGestionnaire || isCentralAdmin,
     canManageProfessors: isSecretary || isCentralAdmin,
     canManageCourses: isSecretary || isCentralAdmin,
-    canManageStudents: isGestionnaire,
+    canManageStudents: isCentralAdmin || isGestionnaire,
     canManageNotes: isProfessor,
     canViewProgress: isProfessor || isCentralAdmin || isSecretary,
     canAccessAdminSystem: isCentralAdmin,

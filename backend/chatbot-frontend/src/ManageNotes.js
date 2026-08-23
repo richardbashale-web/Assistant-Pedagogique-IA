@@ -177,7 +177,7 @@ function ManageNotes({ token }) {
                 <strong>{note.title}</strong>
                 <span className="note-meta">Cours: {note.course_title}</span>
               </div>
-              <div className="note-submeta">Par: {note.professor_name || "Professeur"}</div>
+              <div className="note-submeta">Par: {note.professor_name || "Enseignant"}</div>
               {note.content && <p className="note-content">{note.content}</p>}
               {note.attachment_url && (
                 <a href={note.attachment_url} target="_blank" rel="noreferrer" className="attachment-link">

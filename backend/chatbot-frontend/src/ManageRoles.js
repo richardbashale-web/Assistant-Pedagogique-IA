@@ -175,7 +175,7 @@ function ManageRoles({ token }) {
     }
 
     if (createRoleNom === "professeur" && (!createSpecialite.trim() || !createFaculte)) {
-      showMessage("error", "❌ Spécialité et faculté sont requises pour un professeur.");
+      showMessage("error", "❌ Spécialité et faculté sont requises pour un enseignant.");
       return;
     }
 
@@ -261,7 +261,7 @@ function ManageRoles({ token }) {
     admin_central: "Administrateur Central",
     admin_gestionnaire: "Administrateur Gestionnaire",
     secretaire_facultaire: "Secrétaire Facultaire",
-    professeur: "Professeur",
+    professeur: "Enseignant",
     etudiant: "Étudiant",
   };
 

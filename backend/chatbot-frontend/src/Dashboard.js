@@ -126,7 +126,7 @@ function AdminCentralDashboard({ data }) {
           <MiniBarChart data={studentsData} labelKey="label" valueKey="value" color="#f59e0b" />
         </div>
         <div className="dash-chart-card">
-          <div className="dash-chart-title">👨‍🏫 Professeurs par faculté</div>
+          <div className="dash-chart-title">👨‍🏫 Enseignants par faculté</div>
           <MiniBarChart data={professorsData} labelKey="label" valueKey="value" color="#10b981" />
         </div>
       </div>
@@ -161,7 +161,7 @@ function GestionnaireDashboard({ data }) {
             columns={[
               { key: "nom", label: "Nom" },
               { key: "faculte", label: "Faculté" },
-              { key: "nb_professors", label: "Professeurs enregistrés" },
+              { key: "nb_professors", label: "Enseignants enregistrés" },
             ]}
           />
         </div>
@@ -180,7 +180,7 @@ function SecretaireDashboard({ data }) {
       <div className="dash-hero dash-hero--secretaire">
         <div className="dash-hero-badge" style={{ background: "rgba(6,182,212,0.18)", color: "#67e8f9" }}>📋 Secrétaire Facultaire</div>
         <h1 className="dash-hero-title">Faculté : {faculte}</h1>
-        <p className="dash-hero-sub">Gestion académique des professeurs et des cours de votre faculté</p>
+        <p className="dash-hero-sub">Gestion académique des enseignants et des cours de votre faculté</p>
       </div>
 
       <div className="dash-stats-grid">
@@ -191,7 +191,7 @@ function SecretaireDashboard({ data }) {
 
       <div className="dash-charts-row">
         <div className="dash-chart-card" style={{ flex: 1 }}>
-          <div className="dash-chart-title">👨‍🏫 Professeurs de la faculté</div>
+          <div className="dash-chart-title">👨‍🏫 Enseignants de la faculté</div>
           <DataTable
             rows={professors}
             columns={[
@@ -215,7 +215,7 @@ function ProfesseurDashboard({ data }) {
   return (
     <div className="dash-content">
       <div className="dash-hero dash-hero--professeur">
-        <div className="dash-hero-badge" style={{ background: "rgba(16,185,129,0.18)", color: "#6ee7b7" }}>👨‍🏫 Professeur</div>
+        <div className="dash-hero-badge" style={{ background: "rgba(16,185,129,0.18)", color: "#6ee7b7" }}>👨‍🏫 Enseignant</div>
         <h1 className="dash-hero-title">Mes activités pédagogiques</h1>
         <p className="dash-hero-sub">Aperçu de vos cours et notes publiés sur la plateforme</p>
       </div>

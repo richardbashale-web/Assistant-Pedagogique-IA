@@ -86,7 +86,7 @@ function FacultiesView({ token }) {
       <div className="section-header">
         <div>
           <h2>Gestion des Facultés 🏫</h2>
-          <p>Explorez les facultés, modifiez leurs informations, consultez les professeurs et étudiants affiliés.</p>
+          <p>Explorez les facultés, modifiez leurs informations, consultez les enseignants et étudiants affiliés.</p>
         </div>
       </div>
 
@@ -163,7 +163,7 @@ function FacultiesView({ token }) {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               {[
-                { label: "Professeurs", count: professors.length, icon: "👨‍🏫", color: "#6366f1" },
+                { label: "Enseignants", count: professors.length, icon: "👨‍🏫", color: "#6366f1" },
                 { label: "Étudiants", count: students.length, icon: "🎓", color: "#10b981" },
               ].map(stat => (
                 <div key={stat.label} className="card" style={{ padding: "20px", display: "flex", alignItems: "center", gap: "16px" }}>
@@ -179,7 +179,7 @@ function FacultiesView({ token }) {
             <div style={{ display: "flex", gap: "8px" }}>
               {["professors", "students"].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)} className={`nav-btn ${activeTab === tab ? "active" : ""}`}>
-                  {tab === "professors" ? `👨‍🏫 Professeurs (${professors.length})` : `🎓 Étudiants (${students.length})`}
+                  {tab === "professors" ? `👨‍🏫 Enseignants (${professors.length})` : `🎓 Étudiants (${students.length})`}
                 </button>
               ))}
             </div>
@@ -187,7 +187,7 @@ function FacultiesView({ token }) {
             {loadingDetails ? (
               <div className="empty-state">Chargement des données...</div>
             ) : activeTab === "professors" ? (
-              professors.length === 0 ? <div className="empty-state">Aucun professeur affilié.</div> : (
+              professors.length === 0 ? <div className="empty-state">Aucun enseignant affilié.</div> : (
                 <div className="progress-table-wrapper"><table className="progress-table">
                   <thead><tr><th>Nom</th><th>Spécialité</th><th>Email</th><th>Téléphone</th></tr></thead>
                   <tbody>{professors.map(prof => <tr key={prof.id}><td style={{ fontWeight: 600 }}>👨‍🏫 {prof.nom}</td><td><span style={{ padding: "4px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: 700, background: "rgba(99,102,241,0.15)", color: "#a5b4fc" }}>{prof.specialite}</span></td><td style={{ color: "#94a3b8" }}>{prof.email || "—"}</td><td style={{ color: "#94a3b8" }}>{prof.telephone || "—"}</td></tr>)}</tbody>

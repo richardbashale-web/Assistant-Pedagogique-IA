@@ -4,21 +4,15 @@ import { useToast } from "./Toast";
 function ManageCourses({ token }) {
   const [titre, setTitre] = useState("");
   const [description, setDescription] = useState("");
-  const [professeurId, setProfesseurId] = useState("");
-  const [promotions, setPromotions] = useState([]);
   const [list, setList] = useState([]);
-  const [professors, setProfessors] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [search, setSearch] = useState("");
   const { toastContainer, showToast } = useToast();
 
-  const PROMOTION_OPTIONS = ["L1", "L2", "L3", "M1", "M2"];
-
   const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
   const API_COURSES = `${API_BASE_URL}/api/courses/`;
-  const API_PROFESSORS = `${API_BASE_URL}/api/professors/`;
 
   const fetchCourses = useCallback(async () => {
     try {
@@ -33,40 +27,18 @@ function ManageCourses({ token }) {
     }
   }, [token, API_COURSES]);
 
-  const fetchProfessors = useCallback(async () => {
-    try {
-      // Pour permettre à un professeur d'avoir un cours dans n'importe quelle faculté,
-      // on récupère tous les professeurs disponibles.
-      const res = await fetch(API_PROFESSORS, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) setProfessors(await res.json());
-    } catch (e) {
-      console.error("Erreur enseignant:", e);
-    }
-  }, [token, API_PROFESSORS]);
-
   useEffect(() => {
-    if (token) {
-      fetchCourses();
-      fetchProfessors();
-    }
-  }, [token, fetchCourses, fetchProfessors]);
+    if (token) fetchCourses();
+  }, [token, fetchCourses]);
 
   const resetForm = () => {
-    setTitre(""); setDescription(""); setProfesseurId(""); setPromotions([]);
+    setTitre(""); setDescription("");
     setEditingId(null);
   };
 
-  const handlePromotionToggle = (promo) => {
-    setPromotions(prev => 
-      prev.includes(promo) ? prev.filter(p => p !== promo) : [...prev, promo]
-    );
-  };
-
   const handleSubmit = async () => {
-    if (!titre || !description || !professeurId || promotions.length === 0) { 
-      showToast("Titre, description, enseignant et au moins une promotion sont obligatoires.", "error"); 
+    if (!titre || !description) { 
+      showToast("Le titre et la description sont obligatoires.", "error"); 
       return; 
     }
     setLoading(true);
@@ -76,12 +48,7 @@ function ManageCourses({ token }) {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ 
-          titre, 
-          description, 
-          professeur: professeurId,
-          promotions 
-        })
+        body: JSON.stringify({ titre, description })
       });
       if (res.ok) {
         showToast(editingId ? "Cours modifié avec succès !" : "Cours créé avec succès !", "success");
@@ -102,8 +69,6 @@ function ManageCourses({ token }) {
   const editCourse = (c) => {
     setTitre(c.titre); 
     setDescription(c.description); 
-    setProfesseurId(c.professeur);
-    setPromotions(c.promotions || []);
     setEditingId(c.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -133,7 +98,7 @@ function ManageCourses({ token }) {
       <div className="section-header">
         <div>
           <h2>Gestion des Cours 📚</h2>
-          <p>{editingId ? "Modifiez les informations du cours sélectionné." : "Créez de nouveaux cours et associez-les à des professeurs."}</p>
+          <p>{editingId ? "Modifiez les informations du cours sélectionné." : "Créez un cours sans devoir l'associer à un enseignant ou à une promotion."}</p>
         </div>
       </div>
 
@@ -142,26 +107,6 @@ function ManageCourses({ token }) {
           <label className="field-label">
             Titre du cours *
             <input placeholder="Ex: Introduction à l'Intelligence Artificielle" value={titre} onChange={e => setTitre(e.target.value)} disabled={loading} />
-          </label>
-          <label className="field-label">
-            Professeur *
-            <select value={professeurId} onChange={e => setProfesseurId(e.target.value)} disabled={loading} style={{ backgroundColor: "#1e293b", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", color: "#f8fafc" }}>
-              <option value="">-- Sélectionner un professeur --</option>
-              {professors.map(p => (
-                <option key={p.id} value={p.id}>{p.nom} ({p.faculte})</option>
-              ))}
-            </select>
-          </label>
-          <label className="field-label field-full">
-            Promotions ciblées
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "8px" }}>
-              {PROMOTION_OPTIONS.map(promo => (
-                <label key={promo} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", background: promotions.includes(promo) ? "rgba(99,102,241,0.2)" : "rgba(30,41,59,0.8)", padding: "6px 12px", borderRadius: "20px", border: `1px solid ${promotions.includes(promo) ? "#818cf8" : "rgba(255,255,255,0.1)"}`, fontSize: "13px" }}>
-                  <input type="checkbox" checked={promotions.includes(promo)} onChange={() => handlePromotionToggle(promo)} disabled={loading} style={{ margin: 0 }} />
-                  {promo}
-                </label>
-              ))}
-            </div>
           </label>
           <label className="field-label field-full">
             Description *
@@ -201,7 +146,7 @@ function ManageCourses({ token }) {
           <table className="progress-table">
             <thead>
               <tr>
-                <th>Titre</th><th>Professeur</th><th>Faculté</th><th>Promotions</th><th style={{ textAlign: "center" }}>Actions</th>
+                <th>Titre</th><th>Enseignant</th><th>Faculté</th><th>Promotions</th><th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>

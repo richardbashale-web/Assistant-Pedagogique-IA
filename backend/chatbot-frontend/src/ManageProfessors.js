@@ -149,7 +149,7 @@ function ManageProfessors({ token }) {
           </label>
           <label className="field-label">
             grade *
-            <input placeholder="Ex: Professeur ordinaire" value={grade} onChange={e => setGrade(e.target.value)} disabled={loading} />
+            <input placeholder="Ex: Enseignant ordinaire" value={grade} onChange={e => setGrade(e.target.value)} disabled={loading} />
           </label>
           <label className="field-label">
             Téléphone
@@ -158,7 +158,7 @@ function ManageProfessors({ token }) {
           <FacultySelector token={token} value={faculte} onChange={e => setFaculte(e.target.value)} label="Sélectionner la faculté *" />
           <div className="field-full" style={{ display: "flex", gap: "12px", marginTop: "10px" }}>
             <button className="primary-btn" onClick={handleSubmit} disabled={loading}>
-              {loading ? "Traitement..." : editingId ? "Enregistrer les modifications" : "Ajouter le professeur"}
+              {loading ? "Traitement..." : editingId ? "Enregistrer les modifications" : "Ajouter l'enseignant"}
             </button>
             {editingId && (
               <button className="logout-btn" onClick={resetForm}
@@ -171,7 +171,7 @@ function ManageProfessors({ token }) {
       </div>
 
       <div className="section-header section-header-tight">
-        <h3>Professeurs existants</h3>
+        <h3>Enseignants existants</h3>
         <input
           placeholder="🔍 Rechercher..."
           value={search}
@@ -181,9 +181,9 @@ function ManageProfessors({ token }) {
       </div>
 
       {fetching ? (
-        <div className="empty-state">Chargement des professeurs...</div>
+        <div className="empty-state">Chargement des enseignants...</div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state">{search ? "Aucun résultat pour votre recherche." : "Aucun professeur enregistré pour le moment."}</div>
+        <div className="empty-state">{search ? "Aucun résultat pour votre recherche." : "Aucun enseignant enregistré pour le moment."}</div>
       ) : (
         <div className="progress-table-wrapper">
           <table className="progress-table">

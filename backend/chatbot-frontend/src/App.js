@@ -10,6 +10,7 @@ import ManageSecretaires from "./ManageSecretaires";
 import ManageGestionnaires from "./ManageGestionnaires";
 import ManageRoles from "./ManageRoles";
 import ManageCourses from "./ManageCourses";
+import AccountCreation from "./AccountCreation";
 import Dashboard from "./Dashboard";
 import { getRoleAccess } from "./roleAccess";
 
@@ -243,15 +244,16 @@ function App() {
   const showProgress = access.canViewProgress;
   const showAdminSystem = access.canAccessAdminSystem;
   const isStudent = access.isStudent;
+  const showAccountCreation = access.isCentralAdmin;
 
-  const roleTitle = userRoleDisplay || (access.isCentralAdmin ? 'Administrateur Central' : userRole === 'admin_gestionnaire' ? 'Administrateur Gestionnaire' : userRole === 'secretaire_facultaire' ? 'Secrétaire Facultaire' : userRole === 'professeur' ? 'Professeur' : userRole === 'etudiant' ? 'Étudiant' : isAdmin ? 'Administrateur' : isProfessor ? 'Professeur' : 'Utilisateur');
+  const roleTitle = userRoleDisplay || (access.isCentralAdmin ? 'Administrateur Central' : userRole === 'admin_gestionnaire' ? 'Administrateur Gestionnaire' : userRole === 'secretaire_facultaire' ? 'Secrétaire Facultaire' : userRole === 'professeur' ? 'Enseignant' : userRole === 'etudiant' ? 'Étudiant' : isAdmin ? 'Administrateur' : isProfessor ? 'Enseignant' : 'Utilisateur');
 
   const welcomeBadge = access.isCentralAdmin
     ? 'Administrateur Central'
     : isStudent
       ? 'Étudiant'
       : access.isProfessor
-        ? 'Professeur'
+        ? 'Enseignant'
         : (access.canManageStudents || access.canManageProfessors)
           ? 'Gestion académique'
           : 'Administration';
@@ -338,35 +340,35 @@ function App() {
               >🏢 Facultés</button>
             )}
 
-            {showGestionnaires && (
+            {showAccountCreation && (
               <button
-                className={`nav-btn ${currentView === 'gestionnaires' ? 'active' : ''}`}
-                onClick={() => setCurrentView('gestionnaires')}
-              >💼 Gestionnaires</button>
+                className={`nav-btn ${currentView === 'account_creation' ? 'active' : ''}`}
+                onClick={() => setCurrentView('account_creation')}
+              >Création de compte</button>
             )}
 
-            {showSecretaires && (
+            {!showAccountCreation && showSecretaires && (
               <button
                 className={`nav-btn ${currentView === 'secretaires' ? 'active' : ''}`}
                 onClick={() => setCurrentView('secretaires')}
               >📋 Secrétaires</button>
             )}
 
-            {showProfessors && (
+            {!showAccountCreation && showProfessors && (
               <button
                 className={`nav-btn ${currentView === 'professors' ? 'active' : ''}`}
                 onClick={() => setCurrentView('professors')}
-              >👨‍🏫 Professeurs</button>
+              >👨‍🏫 Enseignants</button>
             )}
 
-            {showCourses && (
+            {!showAccountCreation && showCourses && (
               <button
                 className={`nav-btn ${currentView === 'courses' ? 'active' : ''}`}
                 onClick={() => setCurrentView('courses')}
               >📚 Cours</button>
             )}
 
-            {showStudents && (
+            {!showAccountCreation && showStudents && (
               <button
                 className={`nav-btn ${currentView === 'students' ? 'active' : ''}`}
                 onClick={() => setCurrentView('students')}
@@ -409,6 +411,7 @@ function App() {
 
         <div className="content-area">
           {currentView === 'dashboard' && <Dashboard token={token} />}
+          {showAccountCreation && currentView === 'account_creation' && <AccountCreation token={token} />}
           {showStudents && currentView === 'students' && <ManageStudents token={token} />}
           {showProfessors && currentView === 'professors' && <ManageProfessors token={token} />}
           {showSecretaires && currentView === 'secretaires' && <ManageSecretaires token={token} />}

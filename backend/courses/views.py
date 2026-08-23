@@ -7,6 +7,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import Course, CourseNote
 from .serializers import CourseSerializer, CourseNoteSerializer
 from users.models import Professor, Student
+from users.permissions import user_has_role
 from chatbot.models import Conversation, ChatMessage
 import io
 import re
@@ -135,7 +136,8 @@ class CourseListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         faculte = None
-        if not self.request.user.is_staff:
+        is_central_admin = user_has_role(self.request.user, 'admin_central') or self.request.user.is_superuser
+        if not (self.request.user.is_staff or is_central_admin):
             profile = getattr(self.request.user, 'profile', None)
             if profile and getattr(profile, 'role', None) and profile.role.nom == 'secretaire_facultaire':
                 from users.models import SecretaireFacultaire
