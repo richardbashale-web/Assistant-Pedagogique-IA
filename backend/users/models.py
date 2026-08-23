@@ -142,9 +142,9 @@ class SecretaireFacultaire(models.Model):
         verbose_name = "Secrétaire Facultaire"
         verbose_name_plural = "Secrétaires Facultaires"
         permissions = [
-            ("manage_professors", "Peut gérer les informations des professeurs"),
+            ("manage_professors", "Peut gérer les informations des enseignants"),
             ("register_professors", "Peut enregistrer les enseignants"),
-            ("update_professor_data", "Peut mettre à jour les données des professeurs"),
+            ("update_professor_data", "Peut mettre à jour les données des enseignants"),
             ("manage_academic_tasks", "Peut gérer les tâches administratives académiques"),
         ]
 
@@ -156,8 +156,12 @@ class Professor(models.Model):
     """Professeur - responsable des contenus pédagogiques"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='professor_profile', null=True, blank=True)
     profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='professor', null=True, blank=True)
-    nom = models.CharField(max_length=100)
+    nom = models.CharField(max_length=25)
+    postnom = models.CharField(max_length=25, default='')
+    prenom = models.CharField(max_length=25, default='')
+    sexe = models.CharField(max_length=10, choices=[('M', 'Masculin'), ('F', 'Féminin')], default='M')
     email = models.EmailField(unique=True)
+    grade = models.CharField(max_length=50, default='')
     specialite = models.CharField(max_length=100)
     faculte = models.ForeignKey(Faculty, on_delete=models.PROTECT, related_name='professeurs', null=True)
     telephone = models.CharField(max_length=20, blank=True)
@@ -166,8 +170,8 @@ class Professor(models.Model):
     notes = models.TextField(blank=True)
 
     class Meta:
-        verbose_name = "Professeur"
-        verbose_name_plural = "Professeurs"
+        verbose_name = "Enseignant"
+        verbose_name_plural = "Enseignants"
         permissions = [
             ("add_course_content", "Peut ajouter les cours"),
             ("modify_academic_content", "Peut modifier les contenus académiques"),
@@ -183,7 +187,10 @@ class Student(models.Model):
     """Étudiant - utilisateur principal de l'assistant pédagogique"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile', null=True, blank=True)
     profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='student', null=True, blank=True)
-    nom = models.CharField(max_length=100)
+    nom = models.CharField(max_length=25)
+    postnom = models.CharField(max_length=25, default='')
+    prenom = models.CharField(max_length=25, default='')
+    sexe = models.CharField(max_length=10, choices=[('M', 'Masculin'), ('F', 'Féminin')], default='M')
     email = models.EmailField(unique=True)
     niveau = models.CharField(max_length=50)
     # matricule est maintenant saisi manuellement (plus d'auto-génération)

@@ -42,7 +42,7 @@ function ManageCourses({ token }) {
       });
       if (res.ok) setProfessors(await res.json());
     } catch (e) {
-      console.error("Erreur professeurs:", e);
+      console.error("Erreur enseignant:", e);
     }
   }, [token, API_PROFESSORS]);
 
@@ -66,7 +66,7 @@ function ManageCourses({ token }) {
 
   const handleSubmit = async () => {
     if (!titre || !description || !professeurId || promotions.length === 0) { 
-      showToast("Titre, description, professeur et au moins une promotion sont obligatoires.", "error"); 
+      showToast("Titre, description, enseignant et au moins une promotion sont obligatoires.", "error"); 
       return; 
     }
     setLoading(true);

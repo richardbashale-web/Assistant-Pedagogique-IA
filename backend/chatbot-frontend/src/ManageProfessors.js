@@ -4,8 +4,12 @@ import { useToast } from "./Toast";
 
 function ManageProfessors({ token }) {
   const [nom, setNom] = useState("");
+  const [postnom, setPostnom] = useState("");
+  const [prenom, setPrenom] = useState("");
+  const [sexe, setSexe] = useState("");
   const [email, setEmail] = useState("");
   const [specialite, setSpecialite] = useState("");
+  const [grade, setGrade] = useState("");
   const [faculte, setFaculte] = useState("");
   const [telephone, setTelephone] = useState("");
   const [list, setList] = useState([]);
@@ -25,7 +29,7 @@ function ManageProfessors({ token }) {
       });
       if (res.ok) setList(await res.json());
     } catch (e) {
-      console.error("Erreur lors du chargement des professeurs:", e);
+      console.error("Erreur lors du chargement des enseignants:", e);
     } finally {
       setFetching(false);
     }
@@ -53,7 +57,7 @@ function ManageProfessors({ token }) {
         body: JSON.stringify({ nom, email, specialite, faculte, telephone })
       });
       if (res.ok) {
-        showToast(editingId ? "Professeur modifié avec succès !" : "Professeur ajouté avec succès !", "success");
+        showToast(editingId ? "Enseignant modifié avec succès !" : "Enseignant ajouté avec succès !", "success");
         resetForm();
         fetchProfessors();
       } else {
@@ -76,13 +80,13 @@ function ManageProfessors({ token }) {
   };
 
   const deleteProfessor = async (id) => {
-    if (!window.confirm("Supprimer ce professeur ?")) return;
+    if (!window.confirm("Supprimer cet enseignant ?")) return;
     try {
       const res = await fetch(`${API_URL}${id}/`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (res.ok) { showToast("Professeur supprimé.", "success"); fetchProfessors(); }
+      if (res.ok) { showToast("Enseignant supprimé.", "success"); fetchProfessors(); }
       else showToast("Erreur lors de la suppression.", "error");
     } catch { showToast("Erreur réseau.", "error"); }
   };
@@ -96,24 +100,56 @@ function ManageProfessors({ token }) {
       {toastContainer}
       <div className="section-header">
         <div>
-          <h2>Gestion des Professeurs 👨‍🏫</h2>
-          <p>{editingId ? "Modifiez les informations du professeur sélectionné." : "Enregistrez et gérez les comptes des professeurs de votre faculté."}</p>
+          <h2>Gestion des Enseignants </h2>
+          <p>{editingId ? "Modifiez les informations de l'enseignant sélectionné." : "Enregistrez et gérez les comptes des enseignants de votre faculté."}</p>
         </div>
       </div>
 
       <div className="card notes-card">
         <div className="form-grid">
           <label className="field-label">
-            Nom complet *
-            <input placeholder="Ex: Pr. Jean Dupont" value={nom} onChange={e => setNom(e.target.value)} disabled={loading} />
+            Nom *
+            <input placeholder="Ex: Pr. bashale" value={nom} onChange={e => setNom(e.target.value)} disabled={loading} />
+          </label>
+          <label className="field-label">
+            Postnom
+            <input placeholder="Ex: kanku" value={postnom} onChange={e => setPostnom(e.target.value)} disabled={loading} />
+          </label>
+          <label className="field-label">
+            Prenom
+            <input placeholder="Ex: richard" value={prenom} onChange={e => setPrenom(e.target.value)} disabled={loading} />
+          </label>
+          <label className="field-label">
+            sexe 
+            <select 
+              value={sexe}
+              onChange={e => setSexe(e.target.value)}
+              disabled={loading}
+              style={{ 
+                backgroundColor: "#1e293b", 
+                padding: "10px", 
+                borderRadius: "8px", 
+                border: "1px solid rgba(255,255,255,0.1)", 
+                color: "#f8fafc",
+                width: "100%"
+              }}
+            >
+              <option value="">-- Sélectionner --</option>
+              <option value="Homme">Homme</option>
+              <option value="Femme">Femme</option>
+            </select>
           </label>
           <label className="field-label">
             Adresse email *
-            <input placeholder="Ex: j.dupont@univ.edu" type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={loading} />
+            <input placeholder="Ex: rbashale@univ.edu" type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={loading} />
           </label>
           <label className="field-label">
             Spécialité *
             <input placeholder="Ex: Intelligence Artificielle" value={specialite} onChange={e => setSpecialite(e.target.value)} disabled={loading} />
+          </label>
+          <label className="field-label">
+            grade *
+            <input placeholder="Ex: Professeur ordinaire" value={grade} onChange={e => setGrade(e.target.value)} disabled={loading} />
           </label>
           <label className="field-label">
             Téléphone

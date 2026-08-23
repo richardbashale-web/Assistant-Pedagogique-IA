@@ -6,6 +6,9 @@ import ImportStudentsModal from "./ImportStudentsModal";
 function ManageStudents({ token }) {
   const [students, setStudents] = useState([]);
   const [nom, setNom] = useState("");
+  const [postnom, setPostnom] = useState("");
+  const [prenom, setPrenom] = useState("");
+  const [sexe, setSexe] = useState("M");
   const [email, setEmail] = useState("");
   const [niveau, setNiveau] = useState("");
   const [faculte, setFaculte] = useState("");
@@ -38,7 +41,7 @@ function ManageStudents({ token }) {
   }, [token, fetchStudents]);
 
   const resetForm = () => {
-    setNom(""); setEmail(""); setNiveau(""); setFaculte(""); setMatricule(""); setEditingId(null);
+    setNom(""); setPostnom(""); setPrenom(""); setSexe("M"); setEmail(""); setNiveau(""); setFaculte(""); setMatricule(""); setEditingId(null);
   };
 
   const handleSubmit = async () => {
@@ -52,7 +55,7 @@ function ManageStudents({ token }) {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ nom, email, niveau, faculte, matricule })
+        body: JSON.stringify({ nom, postnom, prenom, sexe, email, niveau, faculte, matricule })
       });
       if (res.ok) {
         showToast(editingId ? "Étudiant modifié avec succès !" : "Étudiant ajouté avec succès !", "success");
@@ -69,7 +72,7 @@ function ManageStudents({ token }) {
   };
 
   const editStudent = (s) => {
-    setNom(s.nom); setEmail(s.email); setNiveau(s.niveau);
+    setNom(s.nom); setPostnom(s.postnom || ""); setPrenom(s.prenom || ""); setSexe(s.sexe || "M"); setEmail(s.email); setNiveau(s.niveau);
     setFaculte(s.faculte); setMatricule(s.matricule || "");
     setEditingId(s.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -159,8 +162,23 @@ function ManageStudents({ token }) {
       <div className="card notes-card">
         <div className="form-grid">
           <label className="field-label">
-            Nom complet *
-            <input placeholder="Ex: Alice Kabongo Mbeki" value={nom} onChange={e => setNom(e.target.value)} disabled={loading} />
+            Nom *
+            <input placeholder="Ex: Kabongo" value={nom} onChange={e => setNom(e.target.value)} disabled={loading} />
+          </label>
+          <label className="field-label">
+            Post-nom
+            <input placeholder="Ex: Mbeki" value={postnom} onChange={e => setPostnom(e.target.value)} disabled={loading} />
+          </label>
+          <label className="field-label">
+            Prénom
+            <input placeholder="Ex: Alice" value={prenom} onChange={e => setPrenom(e.target.value)} disabled={loading} />
+          </label>
+          <label className="field-label">
+            Sexe
+            <select value={sexe} onChange={e => setSexe(e.target.value)} disabled={loading} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(30,41,59,0.8)", color: "#f8fafc" }}>
+              <option value="M">Masculin</option>
+              <option value="F">Féminin</option>
+            </select>
           </label>
           <label className="field-label">
             Adresse email *
@@ -216,9 +234,11 @@ function ManageStudents({ token }) {
           <table className="progress-table">
             <thead>
               <tr>
-                <th>Nom complet</th>
                 <th>Matricule</th>
-                <th>Niveau</th>
+                <th>Nom</th>
+                <th>Prénom</th>
+                <th>Sexe</th>
+                <th>Promotion</th>
                 <th>Email</th>
                 <th>Faculté</th>
                 <th style={{ textAlign: "center" }}>Statut</th>
@@ -228,8 +248,10 @@ function ManageStudents({ token }) {
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id} style={editingId === s.id ? { background: "rgba(99,102,241,0.08)" } : {}}>
+                  <td style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 600 }}>{s.matricule || "-"}</td>
                   <td style={{ fontWeight: 600 }}>{s.nom}</td>
-                  <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{s.matricule || "-"}</td>
+                  <td>{s.prenom}</td>
+                  <td>{s.sexe === 'F' ? 'Féminin' : 'Masculin'}</td>
                   <td>{s.niveau}</td>
                   <td>{s.email}</td>
                   <td>

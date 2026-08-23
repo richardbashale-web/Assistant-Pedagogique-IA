@@ -208,7 +208,10 @@ class StudentImportView(APIView):
         Student.objects.create(
             user=user,
             profile=profile,
-            nom=nom_complet,
+            nom=nom,
+            postnom=post_nom,
+            prenom=prenom,
+            sexe=sexe,
             email=email,
             niveau=promotion,
             matricule=matricule,

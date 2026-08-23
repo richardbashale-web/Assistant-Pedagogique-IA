@@ -49,8 +49,8 @@ function ImportStudentsModal({ token, onClose, onImportDone }) {
 
   const validateAndSetFile = (f) => {
     const ext = f.name.split(".").pop().toLowerCase();
-    if (!["xlsx", "csv"].includes(ext)) {
-      setErrorMsg("Seuls les fichiers .xlsx et .csv sont acceptés.");
+    if (!["xlsx", "csv", "pdf", "txt"].includes(ext)) {
+      setErrorMsg("Seuls les fichiers .txt, .pdf,  .xlsx et .csv sont acceptés.");
       return;
     }
     setErrorMsg("");
@@ -63,7 +63,7 @@ function ImportStudentsModal({ token, onClose, onImportDone }) {
     if (!facultyId) { setErrorMsg("Veuillez sélectionner une faculté."); return; }
     if (!promotion) { setErrorMsg("Veuillez sélectionner une promotion."); return; }
     if (!academicYear) { setErrorMsg("Veuillez sélectionner une année académique."); return; }
-    if (!file) { setErrorMsg("Veuillez sélectionner un fichier .xlsx ou .csv."); return; }
+    if (!file) { setErrorMsg("Veuillez sélectionner un fichier .txt, .pdf, .xlsx ou .csv."); return; }
 
     setLoading(true);
     setReport(null);
