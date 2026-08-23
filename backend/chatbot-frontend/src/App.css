@@ -983,6 +983,37 @@ body, html {
   resize: vertical;
 }
 
+.selection-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.selection-list--inline {
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+}
+
+.selection-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+}
+
+.selection-item input {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.selection-item span {
+  overflow-wrap: anywhere;
+}
+
 .file-input-label {
   align-items: flex-start;
 }

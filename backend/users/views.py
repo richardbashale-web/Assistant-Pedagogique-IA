@@ -292,7 +292,13 @@ class ProfessorListCreateView(generics.ListCreateAPIView):
                     profile = getattr(user, 'profile', None)
 
         secretaire = SecretaireFacultaire.objects.filter(user=self.request.user).first()
-        serializer.save(user=user, profile=profile, enregistre_par=secretaire)
+        if secretaire:
+            if not secretaire.faculte:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Aucune faculté n'est associée à ce secrétaire.")
+            serializer.save(user=user, profile=profile, enregistre_par=secretaire, faculte=secretaire.faculte)
+            return
+        serializer.save(user=user, profile=profile, enregistre_par=None)
 
 
 class ProfessorDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -312,6 +318,24 @@ class ProfessorDetailView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied("Accès refusé.")
         instance.delete()
 
+
+class ProfessorToggleActiveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        professor = Professor.objects.filter(pk=pk).first()
+        if not professor or not can_manage_users(request.user):
+            return Response({'error': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
+        secretaire = SecretaireFacultaire.objects.filter(user=request.user).first()
+        if secretaire and professor.faculte_id != secretaire.faculte_id:
+            return Response({'error': 'Cet enseignant ne fait pas partie de votre faculté.'}, status=status.HTTP_403_FORBIDDEN)
+        professor.is_active = not professor.is_active
+        professor.save(update_fields=['is_active'])
+        if professor.user:
+            professor.user.is_active = professor.is_active
+            professor.user.save(update_fields=['is_active'])
+        return Response({'is_active': professor.is_active})
+
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -319,6 +343,7 @@ class CurrentUserView(APIView):
         professor = getattr(request.user, 'professor_profile', None)
         student = getattr(request.user, 'student_profile', None)
         profile = getattr(request.user, 'profile', None)
+        secretaire = SecretaireFacultaire.objects.filter(user=request.user).first()
         return Response({
             "id": request.user.id,
             "username": request.user.username,
@@ -328,6 +353,8 @@ class CurrentUserView(APIView):
             "professor_id": professor.id if professor else None,
             "role": profile.role.nom if profile and profile.role else None,
             "role_display": profile.role.get_nom_display() if profile and profile.role else None,
+            "faculte": secretaire.faculte.code if secretaire and secretaire.faculte else None,
+            "faculte_nom": secretaire.faculte.nom if secretaire and secretaire.faculte else None,
         })
 
 
@@ -774,10 +801,10 @@ def dashboard_stats(request):
         professor = Professor.objects.filter(user=user).first()
         if professor:
             from courses.models import Course, CourseNote
-            nb_courses = Course.objects.filter(professeur=professor).count()
+            nb_courses = Course.objects.filter(enseignants=professor).count()
             nb_notes = CourseNote.objects.filter(professor=professor).count()
             courses_list = list(
-                Course.objects.filter(professeur=professor)
+                Course.objects.filter(enseignants=professor)
                 .values('id', 'titre', 'date_creation')[:10]
             )
             recent_notes = list(

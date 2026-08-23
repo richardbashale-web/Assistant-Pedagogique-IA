@@ -165,6 +165,7 @@ class Professor(models.Model):
     specialite = models.CharField(max_length=100)
     faculte = models.ForeignKey(Faculty, on_delete=models.PROTECT, related_name='professeurs', null=True)
     telephone = models.CharField(max_length=20, blank=True)
+    is_active = models.BooleanField(default=True, verbose_name="Compte actif")
     date_inscription = models.DateTimeField(auto_now_add=True)
     enregistre_par = models.ForeignKey(SecretaireFacultaire, on_delete=models.SET_NULL, null=True, blank=True, related_name='professeurs_enregistres')
     notes = models.TextField(blank=True)

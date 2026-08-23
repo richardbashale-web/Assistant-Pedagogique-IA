@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import FacultySelector from "./FacultySelector";
 import { useToast } from "./Toast";
 
-function ManageProfessors({ token }) {
+function ManageProfessors({ token, secretaryMode = false }) {
   const [nom, setNom] = useState("");
   const [postnom, setPostnom] = useState("");
   const [prenom, setPrenom] = useState("");
@@ -38,6 +38,13 @@ function ManageProfessors({ token }) {
   useEffect(() => {
     if (token) fetchProfessors();
   }, [token, fetchProfessors]);
+
+  useEffect(() => {
+    if (!secretaryMode || !token) return;
+    fetch(`${API_BASE_URL}/api/me/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data?.faculte) setFaculte(data.faculte); });
+  }, [token, secretaryMode, API_BASE_URL]);
 
   const resetForm = () => {
     setNom(""); setEmail(""); setSpecialite(""); setFaculte(""); setTelephone("");
@@ -89,6 +96,21 @@ function ManageProfessors({ token }) {
       if (res.ok) { showToast("Enseignant supprimé.", "success"); fetchProfessors(); }
       else showToast("Erreur lors de la suppression.", "error");
     } catch { showToast("Erreur réseau.", "error"); }
+  };
+
+  const toggleProfessorActive = async (professor) => {
+    const action = professor.is_active !== false ? "désactiver" : "activer";
+    if (!window.confirm(`Voulez-vous ${action} cet enseignant ?`)) return;
+    try {
+      const res = await fetch(`${API_URL}${professor.id}/toggle-active/`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setList((current) => current.map((item) => item.id === professor.id ? { ...item, is_active: data.is_active } : item));
+      showToast(`Enseignant ${data.is_active ? "activé" : "désactivé"}.`, "success");
+    } catch { showToast("Impossible de modifier le statut.", "error"); }
   };
 
   const filtered = list.filter(p =>
@@ -155,7 +177,13 @@ function ManageProfessors({ token }) {
             Téléphone
             <input placeholder="Ex: +243..." value={telephone} onChange={e => setTelephone(e.target.value)} disabled={loading} />
           </label>
-          <FacultySelector token={token} value={faculte} onChange={e => setFaculte(e.target.value)} label="Sélectionner la faculté *" />
+          {secretaryMode ? (
+            <label className="field-label">Votre faculté
+              <input value={faculte || "Chargement..."} disabled />
+            </label>
+          ) : (
+            <FacultySelector token={token} value={faculte} onChange={e => setFaculte(e.target.value)} label="Sélectionner la faculté *" />
+          )}
           <div className="field-full" style={{ display: "flex", gap: "12px", marginTop: "10px" }}>
             <button className="primary-btn" onClick={handleSubmit} disabled={loading}>
               {loading ? "Traitement..." : editingId ? "Enregistrer les modifications" : "Ajouter l'enseignant"}
@@ -208,6 +236,9 @@ function ManageProfessors({ token }) {
                     <button onClick={() => editProfessor(p)}
                       style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "8px", padding: "6px 10px", marginRight: "8px", cursor: "pointer", color: "#a5b4fc" }}
                       title="Modifier">✏️ Modifier</button>
+                    <button onClick={() => toggleProfessorActive(p)}
+                      style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "8px", padding: "6px 10px", marginRight: "8px", cursor: "pointer", color: "#fbbf24" }}
+                      title={p.is_active !== false ? "Désactiver" : "Activer"}>{p.is_active !== false ? "🔒 Désactiver" : "🔓 Activer"}</button>
                     <button onClick={() => deleteProfessor(p.id)}
                       style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", color: "#f87171" }}
                       title="Supprimer">🗑️</button>

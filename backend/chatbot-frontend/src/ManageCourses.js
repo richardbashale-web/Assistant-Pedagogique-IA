@@ -153,7 +153,7 @@ function ManageCourses({ token }) {
               {filtered.map(c => (
                 <tr key={c.id} style={editingId === c.id ? { background: "rgba(99,102,241,0.08)" } : {}}>
                   <td style={{ fontWeight: 600 }}>{c.titre}</td>
-                  <td>{c.professeur_nom}</td>
+                  <td>{c.enseignants_noms?.join(", ") || "-"}</td>
                   <td>
                     <span style={{ padding: "4px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: 700, background: "rgba(99,102,241,0.15)", color: "#a5b4fc" }}>
                       {c.faculte_nom || "-"}

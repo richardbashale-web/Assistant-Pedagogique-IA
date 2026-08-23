@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     StudentListCreateView, StudentDetailView,
     StudentImportView, StudentToggleActiveView,
-    ProfessorListCreateView, ProfessorDetailView,
+    ProfessorListCreateView, ProfessorDetailView, ProfessorToggleActiveView,
     CurrentUserView, initialize_roles, list_roles, user_role, assign_role,
     list_users_by_role, create_admin_gestionnaire, create_secretaire,
     list_professors, list_students, list_faculties, get_faculty,
@@ -21,6 +21,7 @@ urlpatterns = [
     # --- Professeurs ---
     path('professors/', ProfessorListCreateView.as_view(), name='professor-list'),
     path('professors/<int:pk>/', ProfessorDetailView.as_view(), name='professor-detail'),
+    path('professors/<int:pk>/toggle-active/', ProfessorToggleActiveView.as_view(), name='professor-toggle-active'),
 
     # --- Utilisateur courant ---
     path('me/', CurrentUserView.as_view(), name='current_user'),

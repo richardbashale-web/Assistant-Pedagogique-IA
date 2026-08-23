@@ -8,6 +8,7 @@ from .models import Course, CourseNote
 from .serializers import CourseSerializer, CourseNoteSerializer
 from users.models import Professor, Student
 from users.permissions import user_has_role
+from django.db.models import Q
 from chatbot.models import Conversation, ChatMessage
 import io
 import re
@@ -106,6 +107,12 @@ class CourseRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
                 return queryset.none()
         return queryset
 
+    def perform_update(self, serializer):
+        assignment_fields = {'enseignants', 'promotions'}
+        if assignment_fields.intersection(self.request.data.keys()) and not user_has_role(self.request.user, 'secretaire_facultaire'):
+            raise PermissionDenied("Seul le secrétaire académique peut modifier les attributions d'un cours.")
+        serializer.save()
+
 
 class CourseListView(generics.ListCreateAPIView):
     queryset = Course.objects.all()
@@ -125,18 +132,21 @@ class CourseListView(generics.ListCreateAPIView):
                 from users.models import SecretaireFacultaire
                 secretaire = SecretaireFacultaire.objects.filter(user=self.request.user).first()
                 if secretaire and secretaire.faculte:
-                    queryset = queryset.filter(faculte=secretaire.faculte)
+                    queryset = queryset.filter(Q(faculte=secretaire.faculte) | Q(faculte__isnull=True))
             # Si c'est un professeur, limiter à ses propres cours
             elif profile and getattr(profile, 'role', None) and profile.role.nom == 'professeur':
                 from users.models import Professor
                 professor = Professor.objects.filter(user=self.request.user).first()
                 if professor:
-                    queryset = queryset.filter(professeur=professor)
+                    queryset = queryset.filter(enseignants=professor)
         return queryset
 
     def perform_create(self, serializer):
         faculte = None
         is_central_admin = user_has_role(self.request.user, 'admin_central') or self.request.user.is_superuser
+        assignment_fields = {'enseignants', 'promotions'}
+        if assignment_fields.intersection(self.request.data.keys()) and not user_has_role(self.request.user, 'secretaire_facultaire'):
+            raise PermissionDenied("Seul le secrétaire académique peut attribuer un cours.")
         if not (self.request.user.is_staff or is_central_admin):
             profile = getattr(self.request.user, 'profile', None)
             if profile and getattr(profile, 'role', None) and profile.role.nom == 'secretaire_facultaire':
@@ -156,6 +166,43 @@ class CourseListView(generics.ListCreateAPIView):
                 faculte = Faculty.objects.get(code=faculte_id)
 
         serializer.save(faculte=faculte)
+
+
+class CourseAssignmentView(APIView):
+    """Attribue un cours à des enseignants et à des promotions (secrétaire uniquement)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not user_has_role(request.user, 'secretaire_facultaire'):
+            raise PermissionDenied("Seul le secrétaire académique peut attribuer un cours.")
+
+        from users.models import SecretaireFacultaire
+        secretaire = SecretaireFacultaire.objects.filter(user=request.user).first()
+        if not secretaire or not secretaire.faculte:
+            raise PermissionDenied("Aucune faculté n'est associée à ce secrétaire.")
+
+        course = Course.objects.filter(pk=pk).filter(Q(faculte=secretaire.faculte) | Q(faculte__isnull=True)).first()
+        if not course:
+            return Response({'error': 'Cours introuvable dans votre faculté.'}, status=404)
+
+        teacher_ids = request.data.get('enseignants', [])
+        promotions = request.data.get('promotions', [])
+        if not isinstance(teacher_ids, list) or not isinstance(promotions, list):
+            raise ValidationError({'error': 'Les enseignants et promotions doivent être des listes.'})
+
+        teachers = Professor.objects.filter(id__in=teacher_ids, faculte=secretaire.faculte)
+        if teachers.count() != len(set(teacher_ids)):
+            raise ValidationError({'enseignants': 'Un ou plusieurs enseignants ne font pas partie de votre faculté.'})
+
+        cleaned_promotions = [str(promotion).strip() for promotion in promotions if str(promotion).strip()]
+        course.enseignants.set(teachers)
+        course.professeur = teachers.first()
+        if course.faculte is None:
+            course.faculte = secretaire.faculte
+        course.promotions = cleaned_promotions
+        course.save(update_fields=['professeur', 'faculte', 'promotions'])
+
+        return Response(CourseSerializer(course, context={'request': request}).data)
 
 
 class CourseNoteListCreateView(generics.ListCreateAPIView):
@@ -210,7 +257,7 @@ class CourseNoteListCreateView(generics.ListCreateAPIView):
                 raise ValidationError({'course': 'Le cours est introuvable.'})
 
         if professor and not self.request.user.is_staff:
-            if course.professeur != professor:
+            if not course.enseignants.filter(pk=professor.pk).exists():
                 raise ValidationError({'course': 'Vous ne pouvez ajouter une note que pour un cours qui vous appartient.'})
 
         attachment = self.request.FILES.get('attachment')

@@ -4,15 +4,19 @@ from .models import Course, CourseNote
 class CourseSerializer(serializers.ModelSerializer):
     professeur_nom = serializers.CharField(source='professeur.nom', read_only=True, allow_null=True, default=None)
     faculte_nom = serializers.CharField(source='faculte.nom', read_only=True)
+    enseignants_noms = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
-        fields = ['id', 'titre', 'description', 'professeur', 'professeur_nom', 'faculte', 'faculte_nom', 'promotions', 'date_creation']
-        read_only_fields = ['professeur_nom', 'faculte_nom', 'date_creation']
+        fields = ['id', 'titre', 'description', 'professeur', 'professeur_nom', 'enseignants', 'enseignants_noms', 'faculte', 'faculte_nom', 'promotions', 'date_creation']
+        read_only_fields = ['professeur_nom', 'enseignants_noms', 'faculte_nom', 'date_creation']
         extra_kwargs = {
             'professeur': {'required': False, 'allow_null': True},
             'promotions': {'required': False},
         }
+
+    def get_enseignants_noms(self, obj):
+        return [enseignant.nom for enseignant in obj.enseignants.all()]
 
     def validate_promotions(self, value):
         if not value:

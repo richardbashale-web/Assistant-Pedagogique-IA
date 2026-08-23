@@ -10,6 +10,8 @@ import ManageSecretaires from "./ManageSecretaires";
 import ManageGestionnaires from "./ManageGestionnaires";
 import ManageRoles from "./ManageRoles";
 import ManageCourses from "./ManageCourses";
+import CourseAssignments from "./CourseAssignments";
+import SecretaryAccountCreation from "./SecretaryAccountCreation";
 import AccountCreation from "./AccountCreation";
 import Dashboard from "./Dashboard";
 import { getRoleAccess } from "./roleAccess";
@@ -245,6 +247,8 @@ function App() {
   const showAdminSystem = access.canAccessAdminSystem;
   const isStudent = access.isStudent;
   const showAccountCreation = access.isCentralAdmin;
+  const showCourseAssignments = access.isSecretary;
+  const showSecretaryAccountCreation = access.isSecretary;
 
   const roleTitle = userRoleDisplay || (access.isCentralAdmin ? 'Administrateur Central' : userRole === 'admin_gestionnaire' ? 'Administrateur Gestionnaire' : userRole === 'secretaire_facultaire' ? 'Secrétaire Facultaire' : userRole === 'professeur' ? 'Enseignant' : userRole === 'etudiant' ? 'Étudiant' : isAdmin ? 'Administrateur' : isProfessor ? 'Enseignant' : 'Utilisateur');
 
@@ -354,18 +358,32 @@ function App() {
               >📋 Secrétaires</button>
             )}
 
-            {!showAccountCreation && showProfessors && (
+            {showSecretaryAccountCreation && (
+              <button
+                className={`nav-btn ${currentView === 'secretary_account_creation' ? 'active' : ''}`}
+                onClick={() => setCurrentView('secretary_account_creation')}
+              >Création de compte</button>
+            )}
+
+            {!showAccountCreation && !showSecretaryAccountCreation && showProfessors && (
               <button
                 className={`nav-btn ${currentView === 'professors' ? 'active' : ''}`}
                 onClick={() => setCurrentView('professors')}
               >👨‍🏫 Enseignants</button>
             )}
 
-            {!showAccountCreation && showCourses && (
+            {!showAccountCreation && !showSecretaryAccountCreation && showCourses && (
               <button
                 className={`nav-btn ${currentView === 'courses' ? 'active' : ''}`}
                 onClick={() => setCurrentView('courses')}
               >📚 Cours</button>
+            )}
+
+            {showCourseAssignments && (
+              <button
+                className={`nav-btn ${currentView === 'course_assignments' ? 'active' : ''}`}
+                onClick={() => setCurrentView('course_assignments')}
+              >Attribution des cours</button>
             )}
 
             {!showAccountCreation && showStudents && (
@@ -412,12 +430,14 @@ function App() {
         <div className="content-area">
           {currentView === 'dashboard' && <Dashboard token={token} />}
           {showAccountCreation && currentView === 'account_creation' && <AccountCreation token={token} />}
+          {showSecretaryAccountCreation && currentView === 'secretary_account_creation' && <SecretaryAccountCreation token={token} />}
           {showStudents && currentView === 'students' && <ManageStudents token={token} />}
           {showProfessors && currentView === 'professors' && <ManageProfessors token={token} />}
           {showSecretaires && currentView === 'secretaires' && <ManageSecretaires token={token} />}
           {showGestionnaires && currentView === 'gestionnaires' && <ManageGestionnaires token={token} />}
           {showFaculties && currentView === 'faculties' && <FacultiesView token={token} />}
           {showCourses && currentView === 'courses' && <ManageCourses token={token} />}
+          {showCourseAssignments && currentView === 'course_assignments' && <CourseAssignments token={token} />}
           {showNotes && currentView === 'notes' && <ManageNotes token={token} />}
           {showProgress && currentView === 'progress' && <StudentProgress token={token} />}
           {showAdminSystem && currentView === 'admin_system' && <ManageRoles token={token} />}

@@ -10,6 +10,11 @@ class Course(models.Model):
         null=True,
         blank=True,
     )
+    enseignants = models.ManyToManyField(
+        'users.Professor',
+        related_name='cours_attribues',
+        blank=True,
+    )
     faculte = models.ForeignKey('users.Faculty', on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
     promotions = models.JSONField(default=list, blank=True)
     date_creation = models.DateTimeField(auto_now_add=True)

@@ -115,7 +115,7 @@ function ManageStudents({ token }) {
   };
 
   const filtered = students.filter(s =>
-    `${s.nom} ${s.email} ${s.matricule} ${s.niveau}`.toLowerCase().includes(search.toLowerCase())
+    `${s.nom} ${s.matricule} ${s.niveau}`.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -218,7 +218,7 @@ function ManageStudents({ token }) {
       <div className="section-header section-header-tight">
         <h3>Étudiants existants ({filtered.length})</h3>
         <input
-          placeholder="🔍 Rechercher par nom, email, matricule..."
+          placeholder="🔍 Rechercher par nom ou matricule..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ background: "rgba(30,41,59,0.8)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "12px", color: "#f8fafc", padding: "8px 14px", fontSize: "13px", outline: "none", width: "260px" }}
@@ -236,10 +236,8 @@ function ManageStudents({ token }) {
               <tr>
                 <th>Matricule</th>
                 <th>Nom</th>
-                <th>Prénom</th>
                 <th>Sexe</th>
                 <th>Promotion</th>
-                <th>Email</th>
                 <th>Faculté</th>
                 <th style={{ textAlign: "center" }}>Statut</th>
                 <th style={{ textAlign: "center" }}>Actions</th>
@@ -250,10 +248,8 @@ function ManageStudents({ token }) {
                 <tr key={s.id} style={editingId === s.id ? { background: "rgba(99,102,241,0.08)" } : {}}>
                   <td style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 600 }}>{s.matricule || "-"}</td>
                   <td style={{ fontWeight: 600 }}>{s.nom}</td>
-                  <td>{s.prenom}</td>
                   <td>{s.sexe === 'F' ? 'Féminin' : 'Masculin'}</td>
                   <td>{s.niveau}</td>
-                  <td>{s.email}</td>
                   <td>
                     <span style={{ padding: "4px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: 700, background: "rgba(99,102,241,0.15)", color: "#a5b4fc" }}>
                       {s.faculte}
