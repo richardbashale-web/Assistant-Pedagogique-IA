@@ -562,6 +562,180 @@ def create_secretaire(request):
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+# --- Modifier / Supprimer / Activer-Désactiver un Admin Gestionnaire ---
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_admin_gestionnaire(request, user_id):
+    """Modifie un administrateur gestionnaire (Admin Central seulement)"""
+    if not (user_has_role(request.user, 'admin_central') or request.user.is_superuser):
+        return Response({"error": "Permission refusée"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        gestionnaire = AdminGestionnaire.objects.select_related('user', 'profile').get(user_id=user_id)
+    except AdminGestionnaire.DoesNotExist:
+        return Response({"error": "Gestionnaire introuvable"}, status=status.HTTP_404_NOT_FOUND)
+
+    nom_complet = request.data.get('nom_complet')
+    email = request.data.get('email')
+
+    if email and User.objects.filter(email=email).exclude(pk=gestionnaire.user_id).exists():
+        return Response({"error": "Cet email est déjà utilisé"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if nom_complet is not None:
+        gestionnaire.profile.nom_complet = nom_complet
+        gestionnaire.profile.save(update_fields=['nom_complet'])
+    if email is not None:
+        gestionnaire.user.email = email
+        gestionnaire.user.save(update_fields=['email'])
+
+    return Response({
+        "success": "Gestionnaire modifié",
+        "user_id": gestionnaire.user.id,
+        "nom_complet": gestionnaire.profile.nom_complet,
+        "email": gestionnaire.user.email,
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_admin_gestionnaire(request, user_id):
+    """Supprime un administrateur gestionnaire (Admin Central seulement)"""
+    if not (user_has_role(request.user, 'admin_central') or request.user.is_superuser):
+        return Response({"error": "Permission refusée"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        gestionnaire = AdminGestionnaire.objects.select_related('user').get(user_id=user_id)
+    except AdminGestionnaire.DoesNotExist:
+        return Response({"error": "Gestionnaire introuvable"}, status=status.HTTP_404_NOT_FOUND)
+
+    gestionnaire.user.delete()  # cascade : supprime aussi le profil et l'admin gestionnaire
+    return Response({"success": "Gestionnaire supprimé"})
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def toggle_admin_gestionnaire_active(request, user_id):
+    """Active/désactive un administrateur gestionnaire (Admin Central seulement)"""
+    if not (user_has_role(request.user, 'admin_central') or request.user.is_superuser):
+        return Response({"error": "Permission refusée"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        gestionnaire = AdminGestionnaire.objects.select_related('user', 'profile').get(user_id=user_id)
+    except AdminGestionnaire.DoesNotExist:
+        return Response({"error": "Gestionnaire introuvable"}, status=status.HTTP_404_NOT_FOUND)
+
+    new_state = not gestionnaire.profile.est_actif
+    gestionnaire.profile.est_actif = new_state
+    gestionnaire.profile.save(update_fields=['est_actif'])
+    gestionnaire.user.is_active = new_state
+    gestionnaire.user.save(update_fields=['is_active'])
+
+    action = 'activé' if new_state else 'désactivé'
+    return Response({
+        "is_active": new_state,
+        "message": f"Le gestionnaire a été {action} avec succès.",
+    })
+
+
+# --- Modifier / Supprimer / Activer-Désactiver un Secrétaire Facultaire ---
+
+def _can_manage_secretaire(request_user, secretaire):
+    """Un admin central peut tout gérer ; un admin gestionnaire seulement ses propres secrétaires."""
+    is_central = user_has_role(request_user, 'admin_central') or request_user.is_superuser
+    is_gestionnaire = user_has_role(request_user, 'admin_gestionnaire')
+    if not (is_central or is_gestionnaire):
+        return False, "Permission refusée"
+    if is_gestionnaire and not is_central:
+        if not secretaire.admin_gestionnaire or secretaire.admin_gestionnaire.user_id != request_user.id:
+            return False, "Permission refusée"
+    return True, None
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_secretaire(request, user_id):
+    """Modifie un secrétaire facultaire (Admin Gestionnaire ou Admin Central)"""
+    try:
+        secretaire = SecretaireFacultaire.objects.select_related('user', 'profile', 'admin_gestionnaire__user').get(user_id=user_id)
+    except SecretaireFacultaire.DoesNotExist:
+        return Response({"error": "Secrétaire introuvable"}, status=status.HTTP_404_NOT_FOUND)
+
+    allowed, error = _can_manage_secretaire(request.user, secretaire)
+    if not allowed:
+        return Response({"error": error}, status=status.HTTP_403_FORBIDDEN)
+
+    nom_complet = request.data.get('nom_complet')
+    email = request.data.get('email')
+    faculte_code = request.data.get('faculte')
+
+    if email and User.objects.filter(email=email).exclude(pk=secretaire.user_id).exists():
+        return Response({"error": "Cet email est déjà utilisé"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if nom_complet is not None:
+        secretaire.profile.nom_complet = nom_complet
+        secretaire.profile.save(update_fields=['nom_complet'])
+    if email is not None:
+        secretaire.user.email = email
+        secretaire.user.save(update_fields=['email'])
+    if faculte_code:
+        try:
+            secretaire.faculte = Faculty.objects.get(code=faculte_code)
+            secretaire.save(update_fields=['faculte'])
+        except Faculty.DoesNotExist:
+            return Response({"error": "Faculté introuvable"}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        "success": "Secrétaire modifié",
+        "user_id": secretaire.user.id,
+        "nom_complet": secretaire.profile.nom_complet,
+        "email": secretaire.user.email,
+        "faculte": secretaire.faculte.code if secretaire.faculte else None,
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_secretaire(request, user_id):
+    """Supprime un secrétaire facultaire (Admin Gestionnaire ou Admin Central)"""
+    try:
+        secretaire = SecretaireFacultaire.objects.select_related('user', 'admin_gestionnaire__user').get(user_id=user_id)
+    except SecretaireFacultaire.DoesNotExist:
+        return Response({"error": "Secrétaire introuvable"}, status=status.HTTP_404_NOT_FOUND)
+
+    allowed, error = _can_manage_secretaire(request.user, secretaire)
+    if not allowed:
+        return Response({"error": error}, status=status.HTTP_403_FORBIDDEN)
+
+    secretaire.user.delete()  # cascade : supprime aussi le profil et le secrétaire
+    return Response({"success": "Secrétaire supprimé"})
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def toggle_secretaire_active(request, user_id):
+    """Active/désactive un secrétaire facultaire (Admin Gestionnaire ou Admin Central)"""
+    try:
+        secretaire = SecretaireFacultaire.objects.select_related('user', 'profile', 'admin_gestionnaire__user').get(user_id=user_id)
+    except SecretaireFacultaire.DoesNotExist:
+        return Response({"error": "Secrétaire introuvable"}, status=status.HTTP_404_NOT_FOUND)
+
+    allowed, error = _can_manage_secretaire(request.user, secretaire)
+    if not allowed:
+        return Response({"error": error}, status=status.HTTP_403_FORBIDDEN)
+
+    new_state = not secretaire.profile.est_actif
+    secretaire.profile.est_actif = new_state
+    secretaire.profile.save(update_fields=['est_actif'])
+    secretaire.user.is_active = new_state
+    secretaire.user.save(update_fields=['is_active'])
+
+    action = 'activé' if new_state else 'désactivé'
+    return Response({
+        "is_active": new_state,
+        "message": f"Le secrétaire a été {action} avec succès.",
+    })
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
