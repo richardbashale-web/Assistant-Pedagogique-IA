@@ -116,3 +116,24 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Grilles inline converties en classes pour la responsivité ── */
+.faculties-grid-layout {
+  grid-template-columns: 300px 1fr;
+}
+
+.faculty-stats-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 900px) {
+  .faculties-grid-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .faculty-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "./Toast";
+import "./FacultiesView.css";
 
 function FacultiesView({ token }) {
   const [faculties, setFaculties] = useState([]);
@@ -90,7 +91,7 @@ function FacultiesView({ token }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: "24px", alignItems: "start" }}>
+      <div className="faculties-grid-layout" style={{ display: "grid", gap: "24px", alignItems: "start" }}>
         <div className="card" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
           <h3 style={{ margin: "0 0 12px", fontSize: "14px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Facultés disponibles
@@ -161,7 +162,7 @@ function FacultiesView({ token }) {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div className="faculty-stats-grid" style={{ display: "grid", gap: "16px" }}>
               {[
                 { label: "Enseignants", count: professors.length, icon: "👨‍🏫", color: "#6366f1" },
                 { label: "Étudiants", count: students.length, icon: "🎓", color: "#10b981" },

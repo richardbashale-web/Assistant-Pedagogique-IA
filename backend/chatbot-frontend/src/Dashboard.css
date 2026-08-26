@@ -430,3 +430,93 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Responsivité — Tablette & Mobile
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .dash-content {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .dash-hero {
+    padding: 24px 26px;
+  }
+
+  .dash-hero-title {
+    font-size: 22px;
+  }
+
+  .dash-stats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .dash-charts-row {
+    flex-direction: column;
+  }
+
+  .dash-chart-card {
+    min-width: 0;
+    padding: 18px;
+  }
+
+  .dash-profile-card {
+    flex-wrap: wrap;
+  }
+
+  .dash-cta-box {
+    flex-wrap: wrap;
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .dash-content {
+    padding: 14px;
+    gap: 16px;
+  }
+
+  .dash-hero {
+    padding: 20px;
+    border-radius: 16px;
+  }
+
+  .dash-hero-title {
+    font-size: 19px;
+  }
+
+  .dash-hero-sub {
+    font-size: 13px;
+  }
+
+  .dash-stats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+  }
+
+  .dash-stat-card {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .dash-stat-value {
+    font-size: 22px;
+  }
+
+  .dash-bar-label {
+    width: 90px;
+    font-size: 11px;
+  }
+
+  .dash-profile-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
+
+  .dash-profile-name {
+    font-size: 16px;
+  }
+}

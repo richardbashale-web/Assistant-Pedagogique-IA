@@ -114,7 +114,7 @@ function ImportStudentsModal({ token, onClose, onImportDone }) {
               <span style={styles.stepBadge}>1</span>
               Sélectionnez le contexte d'import
             </div>
-            <div style={styles.formGrid}>
+            <div className="import-modal-form-grid" style={styles.formGrid}>
               <label style={styles.fieldLabel}>
                 Faculté *
                 <select
@@ -328,7 +328,7 @@ const styles = {
     borderRadius: "50%", width: "24px", height: "24px", display: "inline-flex",
     alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, flexShrink: 0,
   },
-  formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" },
+  formGrid: { display: "grid", gap: "14px" },
   fieldLabel: { display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px", color: "#94a3b8", fontWeight: 600 },
   select: {
     background: "rgba(15,23,42,0.8)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px",

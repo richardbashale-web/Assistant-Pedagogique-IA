@@ -31,7 +31,7 @@ function Login({ setToken }) {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2 style={styles.title}>Connexion 🎓</h2>
+        <h2 style={styles.title}>Connexion </h2>
         <p style={styles.subtitle}>Accédez à votre assistant pédagogique</p>
         
         <div style={styles.inputGroup}>
