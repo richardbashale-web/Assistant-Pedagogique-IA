@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 
 const PROMOTIONS = ["L1", "L2", "L3", "M1", "M2", "Doctorat"];
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
 function generateAcademicYears() {
   const current = new Date().getFullYear();
@@ -27,7 +29,7 @@ function ImportStudentsModal({ token, onClose, onImportDone }) {
 
   // Charger les facult\u00e9s
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/faculties/", {
+    fetch(`${API_BASE_URL}/api/faculties/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
@@ -75,7 +77,7 @@ function ImportStudentsModal({ token, onClose, onImportDone }) {
     formData.append("academic_year", academicYear);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/students/import/", {
+      const res = await fetch(`${API_BASE_URL}/api/students/import/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,

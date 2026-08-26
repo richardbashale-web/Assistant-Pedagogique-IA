@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "./Toast";
 import "./FacultiesView.css";
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
 function FacultiesView({ token }) {
   const [faculties, setFaculties] = useState([]);
@@ -25,7 +27,7 @@ function FacultiesView({ token }) {
 
   const fetchFaculties = useCallback(async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/faculties/", {
+      const res = await fetch(`${API_BASE_URL}/api/faculties/`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) setFaculties(await res.json());
@@ -49,8 +51,8 @@ function FacultiesView({ token }) {
 
     try {
       const [profsRes, studentsRes] = await Promise.all([
-        fetch(`http://127.0.0.1:8000/api/faculties/${faculty.code}/professors/`, { headers: { "Authorization": `Bearer ${token}` } }),
-        fetch(`http://127.0.0.1:8000/api/faculties/${faculty.code}/students/`, { headers: { "Authorization": `Bearer ${token}` } })
+        fetch(`${API_BASE_URL}/api/faculties/${faculty.code}/professors/`, { headers: { "Authorization": `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/api/faculties/${faculty.code}/students/`, { headers: { "Authorization": `Bearer ${token}` } })
       ]);
       if (profsRes.ok) setProfessors((await profsRes.json()).professeurs || []);
       if (studentsRes.ok) setStudents((await studentsRes.json()).etudiants || []);
@@ -61,7 +63,7 @@ function FacultiesView({ token }) {
   const handleSaveFaculty = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/faculties/${selectedFaculty.code}/update/`, {
+      const res = await fetch(`${API_BASE_URL}/api/faculties/${selectedFaculty.code}/update/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify(editData)
