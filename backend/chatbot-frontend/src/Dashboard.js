@@ -304,7 +304,7 @@ function EtudiantDashboard({ data }) {
 // ─── Main Dashboard ────────────────────────────────────────────────────────
 const KNOWN_ROLES = ["admin_central", "admin_gestionnaire", "secretaire_facultaire", "professeur", "etudiant"];
 
-export default function Dashboard({ token }) {
+export default function Dashboard({ token, onUnauthorized }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -316,6 +316,10 @@ export default function Dashboard({ token }) {
       const res = await fetch(`${API_BASE_URL}/api/dashboard/stats/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) {
+        if (onUnauthorized) onUnauthorized();
+        return;
+      }
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const json = await res.json();
       setData(json);
@@ -324,7 +328,7 @@ export default function Dashboard({ token }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, onUnauthorized]);
 
   useEffect(() => {
     fetchStats();

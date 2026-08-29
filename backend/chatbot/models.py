@@ -25,6 +25,7 @@ class ChatMessage(models.Model):
     text = models.TextField(blank=True)
     file = models.FileField(upload_to='chat_uploads/', null=True, blank=True)
     sender = models.CharField(max_length=10, choices=[('user', 'User'), ('bot', 'Bot')])
+    sources = models.JSONField(default=list, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:

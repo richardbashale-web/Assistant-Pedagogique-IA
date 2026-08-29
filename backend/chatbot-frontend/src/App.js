@@ -55,6 +55,10 @@ function App() {
       const res = await fetch(`${API_BASE_URL}/api/me/`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setIsAdmin(data.is_staff);
@@ -66,7 +70,7 @@ function App() {
     } catch (e) {
       console.error(e);
     }
-  }, [token]);
+  }, [token, handleLogout]);
 
   const deleteConversation = async (e, convId) => {
     e.stopPropagation();
@@ -428,7 +432,7 @@ function App() {
         </div>
 
         <div className="content-area">
-          {currentView === 'dashboard' && <Dashboard token={token} />}
+          {currentView === 'dashboard' && <Dashboard token={token} onUnauthorized={handleLogout} />}
           {showAccountCreation && currentView === 'account_creation' && <AccountCreation token={token} />}
           {showSecretaryAccountCreation && currentView === 'secretary_account_creation' && <SecretaryAccountCreation token={token} />}
           {showStudents && currentView === 'students' && <ManageStudents token={token} />}

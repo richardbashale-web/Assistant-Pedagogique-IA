@@ -361,6 +361,7 @@ def chat_history(request):
                 "text": m.text,
                 "sender": m.sender,
                 "file": m.file.url if m.file else None,
+                "sources": m.sources or [],
                 "timestamp": m.timestamp.isoformat()
             }
             for m in messages
@@ -546,7 +547,7 @@ def chatbot_response(request):
 
     # Sauvegarde de la réponse bot
     if request.user.is_authenticated and conversation:
-        bot_kwargs = {'conversation': conversation, 'user': request.user, 'text': reply, 'sender': 'bot'}
+        bot_kwargs = {'conversation': conversation, 'user': request.user, 'text': reply, 'sender': 'bot', 'sources': rag_sources}
         if bot_file and notes_for_message and notes_for_message[0].attachment:
             bot_kwargs['file'] = notes_for_message[0].attachment
         bot_msg = ChatMessage.objects.create(**bot_kwargs)
@@ -630,4 +631,3 @@ def student_progress(request):
         })
 
     return Response(result)
-
