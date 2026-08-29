@@ -210,13 +210,11 @@ SIMPLE_JWT = {
 # DB_HOST
 # DB_PORT
 
+print("DATABASE_URL présente :", bool(os.environ.get("DATABASE_URL")))
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if DATABASE_URL:
-    # ========================================================
-    # PRODUCTION : RAILWAY POSTGRESQL
-    # ========================================================
-
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
@@ -224,12 +222,7 @@ if DATABASE_URL:
             ssl_require=True,
         )
     }
-
 else:
-    # ========================================================
-    # LOCAL : POSTGRESQL
-    # ========================================================
-
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -240,7 +233,6 @@ else:
             "PORT": os.environ.get("DB_PORT", "5432"),
         }
     }
-
 
 # ============================================================
 # PASSWORD VALIDATION
