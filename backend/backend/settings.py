@@ -35,20 +35,19 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
-DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
+DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
 
 # ============================================================
 # ALLOWED HOSTS
 # ============================================================
 
+railway_hostname = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
 ]
-
-# Railway fournit le domaine public de l'application
-railway_hostname = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
 
 if railway_hostname:
     ALLOWED_HOSTS.append(railway_hostname)
@@ -127,7 +126,6 @@ else:
 # ============================================================
 # CSRF
 # ============================================================
-
 CSRF_TRUSTED_ORIGINS = []
 
 if frontend_url:
