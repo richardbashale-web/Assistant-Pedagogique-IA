@@ -167,7 +167,9 @@ def embed_and_store(chunks: List[str], metadata_list: List[Dict[str, Any]]) -> L
     print(f"[RAG] ingest start chunks={len(chunks)} document_id={metadata_list[0].get('document_id') if metadata_list else 'n/a'}")
 
     try:
-        client = chromadb.PersistentClient(path=str(Path(settings.BASE_DIR) / "chroma_db"))
+        client = chromadb.PersistentClient(
+    path=settings.CHROMA_DB_PATH
+)
     except Exception as exc:
         raise RuntimeError(f"Impossible d'initialiser ChromaDB : {exc}") from exc
 

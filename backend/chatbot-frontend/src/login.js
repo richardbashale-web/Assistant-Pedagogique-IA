@@ -3,12 +3,10 @@ import { useState } from "react";
 function Login({ setToken }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
   const handleLogin = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/token/`, {
+      const response = await fetch("http://127.0.0.1:8000/api/token/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -33,7 +31,7 @@ function Login({ setToken }) {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2 style={styles.title}>Connexion </h2>
+        <h2 style={styles.title}>Connexion 🎓</h2>
         <p style={styles.subtitle}>Accédez à votre assistant pédagogique</p>
         
         <div style={styles.inputGroup}>
@@ -68,7 +66,9 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    height: "100vh",
+    minHeight: "100vh",
+    padding: "20px",
+    boxSizing: "border-box",
     backgroundColor: "#f9fafb",
     fontFamily: "'Inter', sans-serif"
   },
@@ -79,6 +79,7 @@ const styles = {
     boxShadow: "0 10px 25px rgba(0,0,0,0.05)",
     width: "100%",
     maxWidth: "400px",
+    boxSizing: "border-box",
     textAlign: "center"
   },
   title: {

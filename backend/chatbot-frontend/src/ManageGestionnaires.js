@@ -142,7 +142,7 @@ function ManageGestionnaires({ token }) {
       {toastContainer}
       <div className="section-header">
         <div>
-          <h2>Gestion des Administrateurs Gestionnaires 💼</h2>
+          <h2>Gestion des Administrateurs Gestionnaires </h2>
           <p>{editingId ? "Modifiez les informations du gestionnaire sélectionné." : "Créez et supervisez les profils des gestionnaires de facultés du système."}</p>
         </div>
       </div>
@@ -155,7 +155,7 @@ function ManageGestionnaires({ token }) {
           </label>
           <label className="field-label">
             Nom complet
-            <input placeholder="Ex: Jean Dupont" value={nom_complet} onChange={e => setNom_complet(e.target.value)} disabled={loading} />
+            <input placeholder="Ex: Richard Bashale" value={nom_complet} onChange={e => setNom_complet(e.target.value)} disabled={loading} />
           </label>
           <label className="field-label">
             Adresse email

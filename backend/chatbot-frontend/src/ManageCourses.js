@@ -97,7 +97,7 @@ function ManageCourses({ token }) {
       {toastContainer}
       <div className="section-header">
         <div>
-          <h2>Gestion des Cours 📚</h2>
+          <h2>Gestion des Cours </h2>
           <p>{editingId ? "Modifiez les informations du cours sélectionné." : "Créez un cours sans devoir l'associer à un enseignant ou à une promotion."}</p>
         </div>
       </div>
@@ -171,7 +171,7 @@ function ManageCourses({ token }) {
                   <td style={{ textAlign: "center" }}>
                     <button onClick={() => editCourse(c)}
                       style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "8px", padding: "6px 10px", marginRight: "8px", cursor: "pointer", color: "#a5b4fc" }}
-                      title="Modifier">✏️ Modifier</button>
+                      title="Modifier">  Modifier</button>
                     <button onClick={() => deleteCourse(c.id)}
                       style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", color: "#f87171" }}
                       title="Supprimer">🗑️</button>

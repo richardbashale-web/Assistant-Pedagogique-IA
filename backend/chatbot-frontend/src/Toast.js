@@ -62,6 +62,19 @@ const toastStyles = `
   line-height: 1;
 }
 .toast-close:hover { opacity: 1; }
+
+@media (max-width: 480px) {
+  .toast-wrapper {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+  }
+  .toast-item {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+}
 `;
 
 let _styleInjected = false;

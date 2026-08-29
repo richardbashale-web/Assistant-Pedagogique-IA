@@ -28,7 +28,9 @@ def retrieve_relevant_chunks(
         return []
 
     try:
-        client = chromadb.PersistentClient(path=str(settings.BASE_DIR / "chroma_db"))
+        client = chromadb.PersistentClient(
+    path=settings.CHROMA_DB_PATH
+)
         collection = client.get_or_create_collection(name="course_documents", metadata={"hnsw:space": "cosine"})
     except Exception:
         return []
