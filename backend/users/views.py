@@ -25,10 +25,33 @@ class StudentListCreateView(generics.ListCreateAPIView):
         return super().get_queryset()
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or can_manage_users(self.request.user)):
+        if not (
+            self.request.user.is_staff
+            or can_manage_users(self.request.user)
+        ):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Seul un secrétaire ou un administrateur peut créer des étudiants.")
-        serializer.save()
+            raise PermissionDenied(
+            "Seul un secrétaire ou un administrateur peut créer des professeurs."
+            )
+
+        secretaire = SecretaireFacultaire.objects.filter(
+            user=self.request.user
+        ).first()
+
+        if secretaire:
+            if not secretaire.faculte:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied(
+                "Aucune faculté n'est associée à ce secrétaire."
+                )
+
+            serializer.save(
+                enregistre_par=secretaire,
+                faculte=secretaire.faculte
+            )
+            return
+
+        serializer.save(enregistre_par=None)
 
 class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Student.objects.all()
@@ -259,65 +282,101 @@ class StudentToggleActiveView(APIView):
 
 # 📌 Professor Views
 class ProfessorListCreateView(generics.ListCreateAPIView):
-    queryset = Professor.objects.all()
+    queryset = Professor.objects.select_related(
+        'user',
+        'profile',
+        'faculte',
+        'enregistre_par'
+    ).all()
+
     serializer_class = ProfessorSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        if not (self.request.user.is_staff or can_manage_users(self.request.user)):
+        if not (
+            self.request.user.is_staff
+            or can_manage_users(self.request.user)
+        ):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Accès refusé.")
+
         return super().get_queryset()
 
     def perform_create(self, serializer):
-        if not (self.request.user.is_staff or can_manage_users(self.request.user)):
+        if not (
+            self.request.user.is_staff
+            or can_manage_users(self.request.user)
+        ):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Seul un secrétaire ou un administrateur peut créer des professeurs.")
-        
-        email = self.request.data.get('email', '')
-        nom = self.request.data.get('nom', '')
-        username = self.request.data.get('username') or (email.split('@')[0] if email else None)
-        password = self.request.data.get('password') or 'Professeur123!'
+            raise PermissionDenied(
+                "Seul un secrétaire ou un administrateur "
+                "peut créer des professeurs."
+            )
 
-        user = None
-        profile = None
-        if username and email:
-            if not User.objects.filter(username=username).exists() and not User.objects.filter(email=email).exists():
-                user = User.objects.create_user(username=username, email=email, password=password)
-                profile, _ = UserProfile.objects.get_or_create(user=user, defaults={'nom_complet': nom})
-                assign_role_to_user(user, 'professeur')
-            elif User.objects.filter(email=email).exists():
-                user = User.objects.filter(email=email).first()
-                if user:
-                    profile = getattr(user, 'profile', None)
+        # Vérifier si l'utilisateur connecté est secrétaire
+        secretaire = SecretaireFacultaire.objects.filter(
+            user=self.request.user
+        ).first()
 
-        secretaire = SecretaireFacultaire.objects.filter(user=self.request.user).first()
         if secretaire:
+            # Une secrétaire doit obligatoirement avoir une faculté
             if not secretaire.faculte:
                 from rest_framework.exceptions import PermissionDenied
-                raise PermissionDenied("Aucune faculté n'est associée à ce secrétaire.")
-            serializer.save(user=user, profile=profile, enregistre_par=secretaire, faculte=secretaire.faculte)
-            return
-        serializer.save(user=user, profile=profile, enregistre_par=None)
+                raise PermissionDenied(
+                    "Aucune faculté n'est associée à ce secrétaire."
+                )
 
+            # La faculté vient automatiquement de la secrétaire.
+            # Le serializer crée User + UserProfile + Professor.
+            serializer.save(
+                enregistre_par=secretaire,
+                faculte=secretaire.faculte
+            )
+            return
+
+        # Administrateur central / gestionnaire
+        # peut choisir la faculté envoyée par React.
+        serializer.save(
+            enregistre_par=None
+        )
 
 class ProfessorDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Professor.objects.all()
+    queryset = Professor.objects.select_related(
+        'user',
+        'profile',
+        'faculte',
+        'enregistre_par'
+    ).all()
+
     serializer_class = ProfessorSerializer
     permission_classes = [IsAuthenticated]
 
     def perform_update(self, serializer):
-        if not (self.request.user.is_staff or can_manage_users(self.request.user)):
+        if not (
+            self.request.user.is_staff
+            or can_manage_users(self.request.user)
+        ):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Accès refusé.")
+
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not (self.request.user.is_staff or can_manage_users(self.request.user)):
+        if not (
+            self.request.user.is_staff
+            or can_manage_users(self.request.user)
+        ):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Accès refusé.")
+
+        # Supprimer également le compte Django
+        # lorsqu'on supprime le professeur.
+        user = instance.user
+
         instance.delete()
 
+        if user:
+            user.delete()
 
 class ProfessorToggleActiveView(APIView):
     permission_classes = [IsAuthenticated]

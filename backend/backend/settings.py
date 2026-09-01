@@ -33,10 +33,9 @@ load_dotenv(BASE_DIR / ".env")
 # SECURITY
 # ============================================================
 
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
 
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
-
 
 # ============================================================
 # ALLOWED HOSTS
@@ -192,31 +191,40 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
 }
 
-
 # ============================================================
 # DATABASE
 # ============================================================
 
-# Railway fournit DATABASE_URL automatiquement lorsqu'un
-# PostgreSQL Railway est connecté au service Django.
+# En production (Railway), DATABASE_URL est fournie
+# automatiquement par Railway.
 #
-# En local, on continue d'utiliser les variables de ton .env :
-#
-# DB_NAME
-# DB_USER
-# DB_PASSWORD
-# DB_HOST
-# DB_PORT
+# En local, les paramètres PostgreSQL sont chargés depuis
+# les variables d'environnement du fichier .env.
 
-print("DATABASE_URL présente :", bool(os.environ.get("DATABASE_URL")))
+if os.environ.get("DATABASE_URL"):
+    print("DATABASE_URL présente :", True)
 
-DATABASES = {
-    "default": dj_database_url.parse(
-        os.environ["DATABASE_URL"],
-        conn_max_age=600,
-        ssl_require=True,
-    )
-}
+    DATABASES = {
+        "default": dj_database_url.parse(
+            os.environ["DATABASE_URL"],
+            conn_max_age=600,
+            ssl_require=True,
+        )
+    }
+
+else:
+    print("DATABASE_URL présente :", False)
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("DB_NAME"),
+            "USER": os.environ.get("DB_USER"),
+            "PASSWORD": os.environ.get("DB_PASSWORD"),
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": os.environ.get("DB_PORT", "5432"),
+        }
+    }
 # ============================================================
 # PASSWORD VALIDATION
 # ============================================================
