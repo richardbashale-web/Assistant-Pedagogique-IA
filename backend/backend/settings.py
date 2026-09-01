@@ -104,28 +104,27 @@ MIDDLEWARE = [
 # CORS
 # ============================================================
 
-# En développement local :
-# React peut communiquer librement avec Django.
-#
-# En production :
-# nous définirons FRONTEND_URL sur Railway.
+CORS_ALLOW_ALL_ORIGINS = False
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 frontend_url = os.environ.get("FRONTEND_URL")
 
 if frontend_url:
-    CORS_ALLOWED_ORIGINS = [
-        frontend_url,
-    ]
-else:
-    CORS_ALLOWED_ORIGINS = []
+    CORS_ALLOWED_ORIGINS.append(frontend_url)
 
 
 # ============================================================
 # CSRF
 # ============================================================
-CSRF_TRUSTED_ORIGINS = []
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 if frontend_url:
     CSRF_TRUSTED_ORIGINS.append(frontend_url)
@@ -134,7 +133,6 @@ if railway_hostname:
     CSRF_TRUSTED_ORIGINS.append(
         f"https://{railway_hostname}"
     )
-
 
 # ============================================================
 # URL CONFIGURATION

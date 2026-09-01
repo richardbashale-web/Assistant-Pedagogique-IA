@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+console.log("API utilisée par React :", API_BASE_URL);
 
 function Login({ setToken }) {
   const [username, setUsername] = useState("");
@@ -16,6 +17,11 @@ function Login({ setToken }) {
     setLoading(true);
 
     try {
+      console.log("=== TEST CONNEXION ===");
+      console.log("API_BASE_URL :", API_BASE_URL);
+      console.log("URL finale :", `${API_BASE_URL}/api/token/`);
+      console.log("Username :", username);
+
       const response = await fetch(`${API_BASE_URL}/api/token/`, {
         method: "POST",
         headers: {
@@ -27,7 +33,31 @@ function Login({ setToken }) {
         }),
       });
 
-      const data = await response.json();
+      console.log("FETCH TERMINÉ");
+      console.log("Status :", response.status);
+      console.log("OK :", response.ok);
+      console.log(
+        "Content-Type :",
+        response.headers.get("content-type")
+      );
+
+      const text = await response.text();
+
+      console.log("Réponse brute :", text);
+
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("La réponse n'est pas du JSON :", e);
+        alert(
+          "Le serveur a renvoyé une réponse qui n'est pas du JSON."
+        );
+        return;
+      }
+
+      console.log("Réponse JSON :", data);
 
       if (response.ok && data.access) {
         setToken(data.access);
@@ -36,8 +66,10 @@ function Login({ setToken }) {
         if (data.refresh) {
           localStorage.setItem("refreshToken", data.refresh);
         }
+
+        console.log("Connexion réussie !");
       } else {
-        console.error("Réponse du serveur :", data);
+        console.error("Erreur serveur :", data);
 
         if (response.status === 401) {
           alert("Nom d'utilisateur ou mot de passe incorrect.");
@@ -49,9 +81,11 @@ function Login({ setToken }) {
         }
       }
     } catch (error) {
-      console.error("Erreur de connexion au serveur :", error);
+      console.error("ERREUR FETCH :", error);
+      console.error("Message :", error.message);
+
       alert(
-        "Impossible de contacter le serveur. Vérifiez que l'API Django est accessible."
+        "Impossible de contacter le serveur : " + error.message
       );
     } finally {
       setLoading(false);

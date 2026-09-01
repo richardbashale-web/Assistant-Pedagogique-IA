@@ -14,14 +14,23 @@ import csv
 
 # 📌 Student Views
 class StudentListCreateView(generics.ListCreateAPIView):
-    queryset = Student.objects.all()
+    queryset = Student.objects.select_related(
+        'user',
+        'profile',
+        'faculte'
+    ).all()
+
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        if not (self.request.user.is_staff or can_manage_users(self.request.user)):
+        if not (
+            self.request.user.is_staff
+            or can_manage_users(self.request.user)
+        ):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Accès refusé.")
+
         return super().get_queryset()
 
     def perform_create(self, serializer):
@@ -31,27 +40,37 @@ class StudentListCreateView(generics.ListCreateAPIView):
         ):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied(
-            "Seul un secrétaire ou un administrateur peut créer des professeurs."
+                "Seul un secrétaire ou un administrateur "
+                "peut créer des étudiants."
             )
 
+        # Vérifier si l'utilisateur connecté est secrétaire
         secretaire = SecretaireFacultaire.objects.filter(
             user=self.request.user
         ).first()
 
         if secretaire:
+            # Une secrétaire doit obligatoirement avoir une faculté
             if not secretaire.faculte:
                 from rest_framework.exceptions import PermissionDenied
                 raise PermissionDenied(
-                "Aucune faculté n'est associée à ce secrétaire."
+                    "Aucune faculté n'est associée à ce secrétaire."
                 )
 
+            # La faculté est automatiquement celle
+            # du secrétaire.
+            #
+            # IMPORTANT :
+            # Student ne possède PAS de champ "enregistre_par".
+            # On ne l'envoie donc pas au serializer.
             serializer.save(
-                enregistre_par=secretaire,
                 faculte=secretaire.faculte
             )
             return
 
-        serializer.save(enregistre_par=None)
+        # Administrateur central / gestionnaire
+        # peut choisir la faculté envoyée par React.
+        serializer.save()
 
 class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Student.objects.all()
