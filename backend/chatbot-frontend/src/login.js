@@ -1,4 +1,5 @@
 import { useState } from "react";
+import logoUwb from "./logo-uwb.webp";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 console.log("API utilisée par React :", API_BASE_URL);
@@ -94,8 +95,15 @@ function Login({ setToken }) {
 
   return (
     <div style={styles.container}>
+      <img
+        src={logoUwb}
+        alt=""
+        aria-hidden="true"
+        style={styles.backgroundLogo}
+      />
       <div style={styles.card}>
-        <h2 style={styles.title}>Connexion 🎓</h2>
+        <img src={logoUwb} alt="Logo UWB" style={styles.panelLogo} />
+        <h2 style={styles.title}>Connexion </h2>
 
         <p style={styles.subtitle}>
           Accédez à votre assistant pédagogique
@@ -149,7 +157,23 @@ const styles = {
     padding: "20px",
     boxSizing: "border-box",
     backgroundColor: "#f9fafb",
+    backgroundImage: "linear-gradient(135deg, rgba(239,246,255,0.88), rgba(248,250,252,0.94))",
     fontFamily: "'Inter', sans-serif",
+    position: "relative",
+    overflow: "hidden",
+  },
+
+  backgroundLogo: {
+    position: "absolute",
+    width: "min(92vw, 980px)",
+    height: "min(92vh, 900px)",
+    objectFit: "contain",
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
+    opacity: 0.16,
+    pointerEvents: "none",
+    zIndex: 0,
   },
 
   card: {
@@ -161,6 +185,16 @@ const styles = {
     maxWidth: "400px",
     boxSizing: "border-box",
     textAlign: "center",
+    position: "relative",
+    zIndex: 1,
+  },
+
+  panelLogo: {
+    display: "block",
+    width: "96px",
+    height: "96px",
+    objectFit: "contain",
+    margin: "0 auto 18px",
   },
 
   title: {

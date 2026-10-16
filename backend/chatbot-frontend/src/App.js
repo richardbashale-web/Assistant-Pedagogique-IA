@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+
 import Login from "./login";
 import "./App.css";
 import ManageProfessors from "./ManageProfessors";
@@ -15,6 +16,7 @@ import SecretaryAccountCreation from "./SecretaryAccountCreation";
 import AccountCreation from "./AccountCreation";
 import Dashboard from "./Dashboard";
 import { getRoleAccess } from "./roleAccess";
+import logoUwb from "./logo-uwb.webp";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -37,6 +39,8 @@ function App() {
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
+
     setToken(null);
     setChat([]);
     setConversations([]);
@@ -51,16 +55,29 @@ function App() {
 
   const fetchUserInfo = useCallback(async () => {
     if (!token) return;
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/me/`, {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
+
       if (res.status === 401) {
         handleLogout();
         return;
       }
+
       if (res.ok) {
         const data = await res.json();
+
+        console.log("=== INFORMATIONS UTILISATEUR ===");
+        console.log("Username :", data.username);
+        console.log("Role :", data.role);
+        console.log("Role display :", data.role_display);
+        console.log("Is professor :", data.is_professor);
+        console.log("Is staff :", data.is_staff);
+
         setIsAdmin(data.is_staff);
         setIsProfessor(data.is_professor);
         setLoggedUser(data.username);
@@ -68,65 +85,100 @@ function App() {
         setUserRoleDisplay(data.role_display);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Erreur récupération utilisateur :", e);
     }
   }, [token, handleLogout]);
 
   const deleteConversation = async (e, convId) => {
     e.stopPropagation();
-    if (!window.confirm("Voulez-vous vraiment supprimer cet historique ?")) return;
+
+    if (
+      !window.confirm(
+        "Voulez-vous vraiment supprimer cet historique ?"
+      )
+    ) {
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/conversations/${convId}/`, {
-        method: 'DELETE',
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/conversations/${convId}/`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       if (response.ok) {
-        if (activeConversationId === convId) setActiveConversationId(null);
+        if (activeConversationId === convId) {
+          setActiveConversationId(null);
+        }
+
         fetchConversations();
       }
     } catch (err) {
-      console.error("Erreur supression:", err);
+      console.error("Erreur suppression :", err);
     }
   };
 
   const fetchConversations = useCallback(async () => {
     if (!token) return;
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/conversations/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/conversations/`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       if (response.status === 401) {
         handleLogout();
         return;
       }
+
       if (response.ok) {
         const data = await response.json();
         setConversations(data);
       }
     } catch (error) {
-      console.error("Erreur conversations:", error);
+      console.error("Erreur conversations :", error);
     }
   }, [token, handleLogout]);
 
+  const fetchHistory = useCallback(
+    async (convId) => {
+      if (!token || !convId) return;
 
-  const fetchHistory = useCallback(async (convId) => {
-    if (!token || !convId) return;
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/history/?conversation_id=${convId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (response.status === 401) {
-        handleLogout();
-        return;
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/history/?conversation_id=${convId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.status === 401) {
+          handleLogout();
+          return;
+        }
+
+        if (response.ok) {
+          const data = await response.json();
+          setChat(data);
+        }
+      } catch (error) {
+        console.error("Erreur historique :", error);
       }
-      if (response.ok) {
-        const data = await response.json();
-        setChat(data);
-      }
-    } catch (error) {
-      console.error("Erreur historique:", error);
-    }
-  }, [token, handleLogout]);
+    },
+    [token, handleLogout]
+  );
 
   useEffect(() => {
     if (token) {
@@ -134,6 +186,7 @@ function App() {
       fetchConversations();
     }
   }, [token, fetchConversations, fetchUserInfo]);
+
   useEffect(() => {
     if (activeConversationId) {
       fetchHistory(activeConversationId);
@@ -143,43 +196,68 @@ function App() {
   }, [activeConversationId, fetchHistory]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [chat]);
 
   const sendMessage = async () => {
     if (!message.trim() || isSending) return;
 
     const questionText = message.trim();
-    const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const currentTime = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
     const userMessage = {
       sender: "user",
       text: questionText,
-      time: currentTime
+      time: currentTime,
     };
 
-    setChat(prev => [...prev, userMessage]);
+    setChat((prev) => [...prev, userMessage]);
     setMessage("");
     setIsSending(true);
 
-    const typingTimer = setTimeout(() => setIsTyping(true), 1000);
+    const typingTimer = setTimeout(
+      () => setIsTyping(true),
+      1000
+    );
+
     const controller = new AbortController();
-    const clientTimeout = setTimeout(() => controller.abort(), 60000);
+
+    const clientTimeout = setTimeout(
+      () => controller.abort(),
+      60000
+    );
 
     try {
       const questionData = new FormData();
+
       questionData.append("message", questionText);
+
       if (activeConversationId) {
-        questionData.append("conversation_id", activeConversationId);
+        questionData.append(
+          "conversation_id",
+          activeConversationId
+        );
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/chatbot/`, {
-        method: "POST",
-        headers: {
-          ...(token && { "Authorization": `Bearer ${token}` })
-        },
-        body: questionData,
-        signal: controller.signal
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/chatbot/`,
+        {
+          method: "POST",
+          headers: {
+            ...(token && {
+              Authorization: `Bearer ${token}`,
+            }),
+          },
+          body: questionData,
+          signal: controller.signal,
+        }
+      );
 
       clearTimeout(clientTimeout);
 
@@ -189,9 +267,12 @@ function App() {
       }
 
       const data = await response.json();
+
       if (response.ok) {
-        // Mettre à jour l'ID de conversation si nouvelle
-        if (data.conversation_id && !activeConversationId) {
+        if (
+          data.conversation_id &&
+          !activeConversationId
+        ) {
           setActiveConversationId(data.conversation_id);
           fetchConversations();
         }
@@ -199,26 +280,42 @@ function App() {
         const botMessage = {
           sender: "bot",
           text: data.response || data.answer || "",
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
           sources: data.sources || [],
           file: data.file,
-          fileName: data.file_name
+          fileName: data.file_name,
         };
-        setChat(prev => [...prev, botMessage]);
+
+        setChat((prev) => [...prev, botMessage]);
       } else {
-        throw new Error(data.error || "Erreur serveur");
+        throw new Error(
+          data.error || "Erreur serveur"
+        );
       }
     } catch (error) {
       clearTimeout(clientTimeout);
-      const isTimeout = error.name === 'AbortError';
-      console.error("Erreur:", error);
-      setChat(prev => [...prev, {
-        sender: "bot",
-        text: isTimeout
-          ? "⏱️ Le serveur met trop de temps à répondre. Vérifiez que le backend est démarré et réessayez."
-          : `Difficulté technique. ${error.message}`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
+
+      const isTimeout =
+        error.name === "AbortError";
+
+      console.error("Erreur :", error);
+
+      setChat((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          text: isTimeout
+            ? "⏱️ Le serveur met trop de temps à répondre. Vérifiez que le backend est démarré et réessayez."
+            : `Difficulté technique. ${error.message}`,
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        },
+      ]);
     } finally {
       clearTimeout(typingTimer);
       setIsTyping(false);
@@ -232,96 +329,215 @@ function App() {
   };
 
   if (!token) {
-    return <Login setToken={(t) => {
-      localStorage.setItem("token", t);
-      setToken(t);
-    }} />;
+    return (
+      <Login
+        setToken={(t) => {
+          localStorage.setItem("token", t);
+          setToken(t);
+        }}
+      />
+    );
   }
 
-  const access = getRoleAccess({ userRole, isAdmin, isProfessor });
+  const access = getRoleAccess({
+    userRole,
+    isAdmin,
+    isProfessor,
+  });
 
-  const showGestionnaires = access.canManageGestionnaires;
-  const showSecretaires = access.canManageSecretaires;
-  const showProfessors = access.canManageProfessors;
-  const showStudents = access.canManageStudents;
-  const showFaculties = access.canAccessFaculties;
-  const showNotes = access.canManageNotes;
-  const showCourses = access.canManageCourses;
-  const showProgress = access.canViewProgress;
-  const showAdminSystem = access.canAccessAdminSystem;
-  const isStudent = access.isStudent;
-  const showAccountCreation = access.isCentralAdmin;
-  const showCourseAssignments = access.isSecretary;
-  const showSecretaryAccountCreation = access.isSecretary;
+  const showGestionnaires =
+    access.canManageGestionnaires;
 
-  const roleTitle = userRoleDisplay || (access.isCentralAdmin ? 'Administrateur Central' : userRole === 'admin_gestionnaire' ? 'Administrateur Gestionnaire' : userRole === 'secretaire_facultaire' ? 'Secrétaire Facultaire' : userRole === 'professeur' ? 'Enseignant' : userRole === 'etudiant' ? 'Étudiant' : isAdmin ? 'Administrateur' : isProfessor ? 'Enseignant' : 'Utilisateur');
+  const showSecretaires =
+    access.canManageSecretaires;
 
-  const welcomeBadge = access.isCentralAdmin
-    ? 'Administrateur Central'
-    : isStudent
-      ? 'Étudiant'
-      : access.isProfessor
-        ? 'Enseignant'
-        : (access.canManageStudents || access.canManageProfessors)
-          ? 'Gestion académique'
-          : 'Administration';
+  const showProfessors =
+    access.canManageProfessors;
 
-  const welcomeMsg = access.isCentralAdmin
-    ? 'Bonjour Administrateur Central ! Bienvenue sur la plateforme de gestion et de supervision pédagogique.'
-    : isStudent
-      ? 'Bonjour ! Posez vos questions et consultez les ressources pédagogiques mises à votre disposition.'
-      : 'Bonjour ! Gérez les responsabilités attribuées à votre profil avec une vue claire sur la plateforme.';
+  const showStudents =
+    access.canManageStudents;
 
-  const roleHint = access.isCentralAdmin
-    ? "Vous disposez des privilèges complets pour gérer le système, attribuer les rôles et administrer la plateforme."
-    : isStudent
-      ? "Vous pouvez consulter les ressources pédagogiques et dialoguer avec l’assistant."
-      : access.isProfessor
-        ? "Vous pouvez alimenter la plateforme avec des contenus pédagogiques."
-        : (access.canManageStudents || access.canManageProfessors)
-          ? "Vous gérez les utilisateurs académiques de votre périmètre."
-          : "Vous avez un accès de supervision sur la plateforme.";
+  const showFaculties =
+    access.canAccessFaculties;
 
+  const showNotes =
+    access.canManageNotes;
+
+  const showCourses =
+    access.canManageCourses;
+
+  const showProgress =
+    access.canViewProgress;
+
+  const showAdminSystem =
+    access.canAccessAdminSystem;
+
+  const showAccountCreation =
+    access.isCentralAdmin;
+
+  const showCourseAssignments =
+    access.isSecretary;
+
+  const showSecretaryAccountCreation =
+    access.isSecretary;
+
+  /*
+   * Titre du rôle affiché dans la barre supérieure.
+   * On utilise directement userRole récupéré depuis /api/me/.
+   */
+  const roleTitle =
+    userRoleDisplay ||
+    (
+      userRole === "admin_central"
+        ? "Administrateur Central"
+        : userRole === "admin_gestionnaire"
+          ? "Administrateur Gestionnaire"
+          : userRole === "secretaire_facultaire"
+            ? "Secrétaire Facultaire"
+            : userRole === "professeur"
+              ? "Enseignant"
+              : userRole === "etudiant"
+                ? "Étudiant"
+                : isAdmin
+                  ? "Administrateur"
+                  : isProfessor
+                    ? "Enseignant"
+                    : "Utilisateur"
+    );
+
+  /*
+   * Badge affiché dans le message d'accueil du chat.
+   */
+  const welcomeBadge =
+    userRole === "admin_central"
+      ? "Administrateur Central"
+      : userRole === "admin_gestionnaire"
+        ? "Administrateur Gestionnaire"
+        : userRole === "secretaire_facultaire"
+          ? "Secrétaire Facultaire"
+          : userRole === "professeur"
+            ? " Enseignant"
+            : userRole === "etudiant"
+              ? " Étudiant"
+              : "Administration";
+
+  /*
+   * Message d'accueil selon le rôle.
+   */
+  const welcomeMsg =
+    userRole === "admin_central"
+      ? "Bonjour Administrateur Central ! Bienvenue sur la plateforme de gestion et de supervision pédagogique."
+      : userRole === "admin_gestionnaire"
+        ? "Bonjour ! Gérez les utilisateurs académiques de votre périmètre."
+        : userRole === "secretaire_facultaire"
+          ? "Bonjour ! Gérez les enseignants, les cours et les activités de votre faculté."
+          : userRole === "professeur"
+            ? "Bonjour ! Gérez vos cours et publiez vos contenus pédagogiques."
+            : userRole === "etudiant"
+              ? "Bonjour ! Posez vos questions et consultez les ressources pédagogiques mises à votre disposition."
+              : "Bonjour ! Gérez les responsabilités attribuées à votre profil avec une vue claire sur la plateforme.";
+
+  /*
+   * Indication complémentaire selon le rôle.
+   */
+  const roleHint =
+    userRole === "admin_central"
+      ? "Vous disposez des privilèges complets pour gérer le système, attribuer les rôles et administrer la plateforme."
+      : userRole === "etudiant"
+        ? "Vous pouvez consulter les ressources pédagogiques et dialoguer avec l’assistant."
+        : userRole === "professeur"
+          ? "Vous pouvez alimenter la plateforme avec des contenus pédagogiques."
+          : userRole === "admin_gestionnaire" ||
+            userRole === "secretaire_facultaire"
+            ? "Vous gérez les utilisateurs et les activités académiques de votre périmètre."
+            : "Vous avez un accès de supervision sur la plateforme.";
 
   return (
     <div className="app-layout">
 
-
-      {/* ── Historique du Chat (visible uniquement si le chat est ouvert) ── */}
-      {currentView === 'chat' && (
-        <div className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
+      {/* ── Historique du Chat ── */}
+      {currentView === "chat" && (
+        <div
+          className={`sidebar${
+            sidebarCollapsed
+              ? " sidebar--collapsed"
+              : ""
+          }`}
+        >
           <button
             className="sidebar-toggle-btn"
-            onClick={() => setSidebarCollapsed(prev => !prev)}
-            title={sidebarCollapsed ? 'Afficher l\'historique' : 'Réduire l\'historique'}
-            aria-label={sidebarCollapsed ? 'Ouvrir la sidebar' : 'Fermer la sidebar'}
+            onClick={() =>
+              setSidebarCollapsed((prev) => !prev)
+            }
+            title={
+              sidebarCollapsed
+                ? "Afficher l'historique"
+                : "Réduire l'historique"
+            }
+            aria-label={
+              sidebarCollapsed
+                ? "Ouvrir la sidebar"
+                : "Fermer la sidebar"
+            }
           >
-            {sidebarCollapsed ? '▶' : '◀'}
+            {sidebarCollapsed ? "▶" : "◀"}
           </button>
 
           <div className="sidebar-inner">
             <div className="sidebar-header">
-              <button className="new-chat-btn" onClick={createNewChat}>
+              <button
+                className="new-chat-btn"
+                onClick={createNewChat}
+              >
                 <span>+</span> Nouvelle discussion
               </button>
             </div>
+
             <div className="history-list">
-              {conversations.map(conv => (
+              {conversations.map((conv) => (
                 <div
                   key={conv.id}
-                  className={`history-item ${activeConversationId === conv.id ? 'active' : ''}`}
+                  className={`history-item ${
+                    activeConversationId === conv.id
+                      ? "active"
+                      : ""
+                  }`}
                   onClick={() => {
                     setActiveConversationId(conv.id);
                   }}
                 >
-                  <div className="history-title">{conv.title}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="history-date">{conv.updated_at}</span>
+                  <div className="history-title">
+                    {conv.title}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span className="history-date">
+                      {conv.updated_at}
+                    </span>
+
                     <button
-                      style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                      onClick={(e) => deleteConversation(e, conv.id)}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                      }}
+                      onClick={(e) =>
+                        deleteConversation(
+                          e,
+                          conv.id
+                        )
+                      }
                       title="Supprimer la discussion"
-                    >🗑️</button>
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </div>
               ))}
@@ -330,182 +546,497 @@ function App() {
         </div>
       )}
 
-      {/* ── Contenu Principal ── */}
+      {/* ── Contenu principal ── */}
       <div className="main-content">
+
         <div className="header">
-          <h2 className="title">Assistant Pédagogique IA</h2>
+
+          <div className="app-brand">
+            <img className="app-brand-logo" src={logoUwb} alt="Logo UWB" />
+            <h2 className="title">
+            Assistant pédagogique UWB
+          </h2>
+          </div>
 
           <div className="navbar">
+
             <button
-              className={`nav-btn ${currentView === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setCurrentView('dashboard')}
-            >📊 Tableau de bord</button>
+              className={`nav-btn ${
+                currentView === "dashboard"
+                  ? "active"
+                  : ""
+              }`}
+              onClick={() =>
+                setCurrentView("dashboard")
+              }
+            >
+              Tableau de bord
+            </button>
 
             {showFaculties && (
               <button
-                className={`nav-btn ${currentView === 'faculties' ? 'active' : ''}`}
-                onClick={() => setCurrentView('faculties')}
-              >🏢 Facultés</button>
+                className={`nav-btn ${
+                  currentView === "faculties"
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setCurrentView("faculties")
+                }
+              >
+                 Facultés
+              </button>
             )}
 
             {showAccountCreation && (
               <button
-                className={`nav-btn ${currentView === 'account_creation' ? 'active' : ''}`}
-                onClick={() => setCurrentView('account_creation')}
-              >Création de compte</button>
+                className={`nav-btn ${
+                  currentView === "account_creation"
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setCurrentView(
+                    "account_creation"
+                  )
+                }
+              >
+                Création de compte
+              </button>
             )}
 
-            {!showAccountCreation && showSecretaires && (
-              <button
-                className={`nav-btn ${currentView === 'secretaires' ? 'active' : ''}`}
-                onClick={() => setCurrentView('secretaires')}
-              >📋 Secrétaires</button>
-            )}
+            {!showAccountCreation &&
+              showSecretaires && (
+                <button
+                  className={`nav-btn ${
+                    currentView === "secretaires"
+                      ? "active"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    setCurrentView("secretaires")
+                  }
+                >
+                   Secrétaires
+                </button>
+              )}
 
             {showSecretaryAccountCreation && (
               <button
-                className={`nav-btn ${currentView === 'secretary_account_creation' ? 'active' : ''}`}
-                onClick={() => setCurrentView('secretary_account_creation')}
-              >Création de compte</button>
+                className={`nav-btn ${
+                  currentView ===
+                  "secretary_account_creation"
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setCurrentView(
+                    "secretary_account_creation"
+                  )
+                }
+              >
+                Création de compte
+              </button>
             )}
 
-            {!showAccountCreation && !showSecretaryAccountCreation && showProfessors && (
-              <button
-                className={`nav-btn ${currentView === 'professors' ? 'active' : ''}`}
-                onClick={() => setCurrentView('professors')}
-              >👨‍🏫 Enseignants</button>
-            )}
+            {!showAccountCreation &&
+              !showSecretaryAccountCreation &&
+              showProfessors && (
+                <button
+                  className={`nav-btn ${
+                    currentView === "professors"
+                      ? "active"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    setCurrentView("professors")
+                  }
+                >
+                   Enseignants
+                </button>
+              )}
 
-            {!showAccountCreation && !showSecretaryAccountCreation && showCourses && (
-              <button
-                className={`nav-btn ${currentView === 'courses' ? 'active' : ''}`}
-                onClick={() => setCurrentView('courses')}
-              >📚 Cours</button>
-            )}
+            {!showAccountCreation &&
+              !showSecretaryAccountCreation &&
+              showCourses && (
+                <button
+                  className={`nav-btn ${
+                    currentView === "courses"
+                      ? "active"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    setCurrentView("courses")
+                  }
+                >
+                   Cours
+                </button>
+              )}
 
             {showCourseAssignments && (
               <button
-                className={`nav-btn ${currentView === 'course_assignments' ? 'active' : ''}`}
-                onClick={() => setCurrentView('course_assignments')}
-              >Attribution des cours</button>
+                className={`nav-btn ${
+                  currentView ===
+                  "course_assignments"
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setCurrentView(
+                    "course_assignments"
+                  )
+                }
+              >
+                Attribution des cours
+              </button>
             )}
 
-            {!showAccountCreation && showStudents && (
-              <button
-                className={`nav-btn ${currentView === 'students' ? 'active' : ''}`}
-                onClick={() => setCurrentView('students')}
-              >🎓 Étudiants</button>
-            )}
+            {!showAccountCreation &&
+              showStudents && (
+                <button
+                  className={`nav-btn ${
+                    currentView === "students"
+                      ? "active"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    setCurrentView("students")
+                  }
+                >
+                  🎓 Étudiants
+                </button>
+              )}
 
             {showNotes && (
               <button
-                className={`nav-btn ${currentView === 'notes' ? 'active' : ''}`}
-                onClick={() => setCurrentView('notes')}
-              >📝 Notes</button>
+                className={`nav-btn ${
+                  currentView === "notes"
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setCurrentView("notes")
+                }
+              >
+                 Notes
+              </button>
             )}
 
             {showProgress && (
               <button
-                className={`nav-btn ${currentView === 'progress' ? 'active' : ''}`}
-                onClick={() => setCurrentView('progress')}
-              >📊 Suivi</button>
+                className={`nav-btn ${
+                  currentView === "progress"
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setCurrentView("progress")
+                }
+              >
+                 Suivi
+              </button>
             )}
 
             {showAdminSystem && (
               <button
-                className={`nav-btn ${currentView === 'admin_system' ? 'active' : ''}`}
-                onClick={() => setCurrentView('admin_system')}
-                style={currentView === 'admin_system' ? {} : { borderColor: 'rgba(239,68,68,0.25)', color: '#fca5a5' }}
-              >⚙️ Admin Système</button>
+                className={`nav-btn ${
+                  currentView === "admin_system"
+                    ? "active"
+                    : ""
+                }`}
+                onClick={() =>
+                  setCurrentView("admin_system")
+                }
+                style={
+                  currentView === "admin_system"
+                    ? {}
+                    : {
+                        borderColor:
+                          "rgba(239,68,68,0.25)",
+                        color: "#fca5a5",
+                      }
+                }
+              >
+                 Admin Système
+              </button>
             )}
+
           </div>
 
           <div className="user-info">
+
             {loggedUser && (
-              <span style={{ fontWeight: 600, color: '#e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '13px', textAlign: 'right' }}>
+              <span
+                style={{
+                  fontWeight: 600,
+                  color: "#e2e8f0",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  fontSize: "13px",
+                  textAlign: "right",
+                }}
+              >
                 <span>👤 {loggedUser}</span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{roleTitle}</span>
+
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  {roleTitle}
+                </span>
               </span>
             )}
-            <button onClick={handleLogout} className="logout-btn">Déconnexion</button>
+
+            <button
+              onClick={handleLogout}
+              className="logout-btn"
+            >
+              Déconnexion
+            </button>
+
           </div>
+
         </div>
 
         <div className="content-area">
-          {currentView === 'dashboard' && <Dashboard token={token} onUnauthorized={handleLogout} />}
-          {showAccountCreation && currentView === 'account_creation' && <AccountCreation token={token} />}
-          {showSecretaryAccountCreation && currentView === 'secretary_account_creation' && <SecretaryAccountCreation token={token} />}
-          {showStudents && currentView === 'students' && <ManageStudents token={token} />}
-          {showProfessors && currentView === 'professors' && <ManageProfessors token={token} />}
-          {showSecretaires && currentView === 'secretaires' && <ManageSecretaires token={token} />}
-          {showGestionnaires && currentView === 'gestionnaires' && <ManageGestionnaires token={token} />}
-          {showFaculties && currentView === 'faculties' && <FacultiesView token={token} />}
-          {showCourses && currentView === 'courses' && <ManageCourses token={token} />}
-          {showCourseAssignments && currentView === 'course_assignments' && <CourseAssignments token={token} />}
-          {showNotes && currentView === 'notes' && <ManageNotes token={token} />}
-          {showProgress && currentView === 'progress' && <StudentProgress token={token} />}
-          {showAdminSystem && currentView === 'admin_system' && <ManageRoles token={token} />}
 
-          {currentView === 'chat' && (
+          {currentView === "dashboard" && (
+            <Dashboard
+              token={token}
+              onUnauthorized={handleLogout}
+            />
+          )}
+
+          {showAccountCreation &&
+            currentView === "account_creation" && (
+              <AccountCreation token={token} />
+            )}
+
+          {showSecretaryAccountCreation &&
+            currentView ===
+              "secretary_account_creation" && (
+              <SecretaryAccountCreation
+                token={token}
+              />
+            )}
+
+          {showStudents &&
+            currentView === "students" && (
+              <ManageStudents token={token} />
+            )}
+
+          {showProfessors &&
+            currentView === "professors" && (
+              <ManageProfessors token={token} />
+            )}
+
+          {showSecretaires &&
+            currentView === "secretaires" && (
+              <ManageSecretaires token={token} />
+            )}
+
+          {showGestionnaires &&
+            currentView === "gestionnaires" && (
+              <ManageGestionnaires token={token} />
+            )}
+
+          {showFaculties &&
+            currentView === "faculties" && (
+              <FacultiesView token={token} />
+            )}
+
+          {showCourses &&
+            currentView === "courses" && (
+              <ManageCourses token={token} />
+            )}
+
+          {showCourseAssignments &&
+            currentView ===
+              "course_assignments" && (
+              <CourseAssignments
+                token={token}
+              />
+            )}
+
+          {showNotes &&
+            currentView === "notes" && (
+              <ManageNotes token={token} />
+            )}
+
+          {showProgress &&
+            currentView === "progress" && (
+              <StudentProgress token={token} />
+            )}
+
+          {showAdminSystem &&
+            currentView === "admin_system" && (
+              <ManageRoles token={token} />
+            )}
+
+          {currentView === "chat" && (
             <>
               <div className="chat-box">
-                {chat.length === 0 && !activeConversationId ? (
+
+                {chat.length === 0 &&
+                !activeConversationId ? (
                   <div className="welcome-container">
+
                     <div className="welcome-card">
-                      <div className="welcome-badge">{welcomeBadge}</div>
-                      <div className="welcome-msg">{welcomeMsg}</div>
-                      <div className="welcome-hint">{roleHint}</div>
+
+                      <div className="welcome-badge">
+                        {welcomeBadge}
+                      </div>
+
+                      <div className="welcome-msg">
+                        {welcomeMsg}
+                      </div>
+
+                      <div className="welcome-hint">
+                        {roleHint}
+                      </div>
+
                     </div>
+
                   </div>
                 ) : (
                   chat.map((msg, index) => (
                     <div
                       key={index}
-                      className={`message ${msg.sender === "user" ? "user-message" : "bot-message"}`}
+                      className={`message ${
+                        msg.sender === "user"
+                          ? "user-message"
+                          : "bot-message"
+                      }`}
                     >
-                      {msg.file && (() => {
-                        const fileUrl = msg.file.startsWith('blob:') ? msg.file : (msg.file.startsWith('http') ? msg.file : `${API_BASE_URL}${msg.file}`);
-                        const lower = (msg.fileName || fileUrl || '').toLowerCase();
-                        if (lower.endsWith('.pdf')) {
+
+                      {msg.file &&
+                        (() => {
+                          const fileUrl =
+                            msg.file.startsWith(
+                              "blob:"
+                            )
+                              ? msg.file
+                              : msg.file.startsWith(
+                                  "http"
+                                )
+                                ? msg.file
+                                : `${API_BASE_URL}${msg.file}`;
+
+                          const lower = (
+                            msg.fileName ||
+                            fileUrl ||
+                            ""
+                          ).toLowerCase();
+
+                          if (
+                            lower.endsWith(".pdf")
+                          ) {
+                            return (
+                              <div className="message-file">
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="attachment-link"
+                                >
+                                  📄 Télécharger le PDF
+                                </a>
+                              </div>
+                            );
+                          }
+
+                          if (
+                            lower.match(
+                              /\.(png|jpe?g|gif)$/
+                            )
+                          ) {
+                            return (
+                              <div className="message-file">
+                                <img
+                                  src={fileUrl}
+                                  alt="Pièce jointe"
+                                  className="message-image"
+                                />
+                              </div>
+                            );
+                          }
+
                           return (
                             <div className="message-file">
-                              <a href={fileUrl} target="_blank" rel="noreferrer" className="attachment-link">📄 Télécharger le PDF</a>
+                              <a
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="attachment-link"
+                              >
+                                Télécharger la pièce jointe
+                              </a>
                             </div>
                           );
-                        }
-                        if (lower.match(/\.(png|jpe?g|gif)$/)) {
-                          return (
-                            <div className="message-file">
-                              <img src={fileUrl} alt="Pièce jointe" className="message-image" />
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="message-file">
-                            <a href={fileUrl} target="_blank" rel="noreferrer" className="attachment-link">Télécharger la pièce jointe</a>
-                          </div>
-                        );
-                      })()}
+                        })()}
+
                       {msg.text}
-                      {msg.sources && msg.sources.length > 0 && (
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Sources : {msg.sources.join(', ')}
-                        </div>
-                      )}
-                      <div className="msg-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-                        <span className="time">{msg.time}</span>
+
+                      {msg.sources &&
+                        msg.sources.length > 0 && (
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              fontSize: "12px",
+                              color:
+                                "var(--text-muted)",
+                            }}
+                          >
+                            Sources :{" "}
+                            {msg.sources.join(", ")}
+                          </div>
+                        )}
+
+                      <div
+                        className="msg-footer"
+                        style={{
+                          display: "flex",
+                          justifyContent:
+                            "space-between",
+                          alignItems: "center",
+                          marginTop: "8px",
+                        }}
+                      >
+
+                        <span className="time">
+                          {msg.time}
+                        </span>
+
                         <button
-                          onClick={() => navigator.clipboard.writeText(msg.text)}
+                          onClick={() =>
+                            navigator.clipboard.writeText(
+                              msg.text
+                            )
+                          }
                           style={{
-                            background: 'transparent', border: 'none', cursor: 'pointer',
-                            color: msg.sender === 'user' ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)'
+                            background:
+                              "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            color:
+                              msg.sender === "user"
+                                ? "rgba(255,255,255,0.7)"
+                                : "var(--text-muted)",
                           }}
                           title="Copier le message"
-                        >📋</button>
+                        >
+                          📋
+                        </button>
+
                       </div>
+
                     </div>
                   ))
                 )}
+
                 {isTyping && (
                   <div className="message bot-message typing-indicator">
                     <span className="typing-dot"></span>
@@ -513,43 +1044,84 @@ function App() {
                     <span className="typing-dot"></span>
                   </div>
                 )}
+
                 <div ref={chatEndRef} />
+
               </div>
 
               <div className="input-area">
-                <div className="input-container" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
 
+                <div
+                  className="input-container"
+                  style={{
+                    flexDirection: "column",
+                    alignItems: "stretch",
+                  }}
+                >
 
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px' }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      alignItems: "center",
+                      marginTop: "10px",
+                    }}
+                  >
+
                     <input
                       type="text"
                       value={message}
-                      onChange={(e) => setMessage(e.target.value)}
+                      onChange={(e) =>
+                        setMessage(e.target.value)
+                      }
                       placeholder="Posez votre question ici..."
-                      onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                      onKeyPress={(e) =>
+                        e.key === "Enter" &&
+                        sendMessage()
+                      }
                       disabled={isSending}
                       autoFocus
-                      style={{ flex: 1 }}
+                      style={{
+                        flex: 1,
+                      }}
                     />
-                    <button onClick={sendMessage} className="send-btn" disabled={isSending}>
+
+                    <button
+                      onClick={sendMessage}
+                      className="send-btn"
+                      disabled={isSending}
+                    >
                       {isSending ? "..." : "Envoyer"}
                     </button>
+
                   </div>
+
                 </div>
+
               </div>
             </>
           )}
+
         </div>
       </div>
 
-      {/* ── Bouton Flottant (FAB) Chat IA ── */}
-      <button 
-        className={`fab-chat ${currentView === 'chat' ? 'active' : ''}`}
-        onClick={() => setCurrentView(currentView === 'chat' ? 'dashboard' : 'chat')}
+      {/* ── Bouton flottant Chat IA ── */}
+      <button
+        className={`fab-chat ${
+          currentView === "chat" ? "active" : ""
+        }`}
+        onClick={() =>
+          setCurrentView(
+            currentView === "chat"
+              ? "dashboard"
+              : "chat"
+          )
+        }
         title="Ouvrir le Chat IA"
       >
         <span className="fab-icon">💬</span>
       </button>
+
     </div>
   );
 }
