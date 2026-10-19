@@ -192,77 +192,117 @@ class StudentImportView(APIView):
             rows.append(normalized)
         return rows
 
-    def _process_row(self, row, line_num, faculty, promotion, academic_year):
-        """Traite une ligne du fichier et crée User + UserProfile + Student."""
-        # Mapper les variantes de noms de colonnes
-        matricule = (row.get('matricule') or '').strip()
-        nom = (row.get('nom') or '').strip()
-        post_nom = (row.get('post-nom') or row.get('post_nom') or row.get('postnom') or '').strip()
-        prenom = (row.get('prenom') or row.get('prénom') or '').strip()
-        sexe = (row.get('sexe') or '').strip().upper()
+    
+def _process_row(self, row, line_num, faculty, promotion, academic_year):
+    """Traite une ligne et crée un étudiant avec un rôle vérifié."""
 
-        # Validation des champs obligatoires
-        if not matricule:
-            return {'error': 'Matricule manquant.', 'data': row}
-        if not nom:
-            return {'error': 'Nom manquant.', 'data': row}
-        if sexe not in ('M', 'F', ''):
-            return {'error': f'Sexe invalide : "{sexe}". Attendu M ou F.', 'data': row}
+    from django.db import transaction
 
-        # Vérification des doublons de matricule
-        if Student.objects.filter(matricule=matricule).exists():
-            return {'error': f'Matricule "{matricule}" déjà existant.', 'data': row}
+    # Mapper les variantes de noms de colonnes.
+    matricule = (row.get('matricule') or '').strip()
+    nom = (row.get('nom') or '').strip()
+    post_nom = (
+        row.get('post-nom')
+        or row.get('post_nom')
+        or row.get('postnom')
+        or ''
+    ).strip()
+    prenom = (row.get('prenom') or row.get('prénom') or '').strip()
+    sexe = (row.get('sexe') or '').strip().upper()
 
-        # Construction du nom complet (nom + post-nom + prénom)
-        nom_complet_parts = [p for p in [nom, post_nom, prenom] if p]
-        nom_complet = ' '.join(nom_complet_parts)
+    # Valider les champs obligatoires.
+    if not matricule:
+        return {'error': 'Matricule manquant.', 'data': row}
 
-        # Génération de l'email fictif à partir du matricule
-        email_base = matricule.lower().replace(' ', '-')
-        email = f'{email_base}@uwb.edu'
-        # En cas de collision d'email (rare mais possible)
-        if User.objects.filter(email=email).exists() or Student.objects.filter(email=email).exists():
-            email = f'{email_base}-{line_num}@uwb.edu'
+    if not nom:
+        return {'error': 'Nom manquant.', 'data': row}
 
-        # Création du username Django (matricule)
-        username = matricule.lower().replace(' ', '-')
-        if User.objects.filter(username=username).exists():
-            username = f'{username}-{line_num}'
+    if sexe not in ('M', 'F', ''):
+        return {
+            'error': f'Sexe invalide : "{sexe}". Attendu M ou F.',
+            'data': row,
+        }
 
-        # Création du compte User avec mot de passe temporaire uwb@1234
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password='uwb@1234',
-            first_name=prenom,
-            last_name=f'{nom} {post_nom}'.strip(),
-        )
+    # Vérifier les doublons.
+    if Student.objects.filter(matricule=matricule).exists():
+        return {
+            'error': f'Matricule "{matricule}" déjà existant.',
+            'data': row,
+        }
 
-        # Création du UserProfile
-        profile = UserProfile.objects.create(
-            user=user,
-            nom_complet=nom_complet,
-            est_actif=True,
-        )
-        assign_role_to_user(user, 'etudiant')
+    nom_complet = ' '.join(
+        part for part in [nom, post_nom, prenom] if part
+    )
 
-        # Création de l'étudiant
-        Student.objects.create(
-            user=user,
-            profile=profile,
-            nom=nom,
-            postnom=post_nom,
-            prenom=prenom,
-            sexe=sexe,
-            email=email,
-            niveau=promotion,
-            matricule=matricule,
-            faculte=faculty,
-            academic_year=academic_year,
-            is_active=True,
-        )
+    # Générer l'adresse email.
+    email_base = matricule.lower().replace(' ', '-')
+    email = f'{email_base}@uwb.edu'
+
+    if (
+        User.objects.filter(email=email).exists()
+        or Student.objects.filter(email=email).exists()
+    ):
+        email = f'{email_base}-{line_num}@uwb.edu'
+
+    # Générer un nom d'utilisateur unique.
+    username = matricule.lower().replace(' ', '-')
+
+    if User.objects.filter(username=username).exists():
+        username = f'{username}-{line_num}'
+
+    try:
+        with transaction.atomic():
+            # Créer le compte Django.
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password='uwb@1234',
+                first_name=prenom,
+                last_name=f'{nom} {post_nom}'.strip(),
+            )
+
+            # Créer le profil.
+            profile = UserProfile.objects.create(
+                user=user,
+                nom_complet=nom_complet or username,
+                est_actif=True,
+            )
+
+            # Attribuer et vérifier le rôle.
+            assign_role_to_user(user, 'etudiant')
+            profile.refresh_from_db()
+
+            if not profile.role or profile.role.nom != 'etudiant':
+                raise ValueError(
+                    "Le rôle étudiant n'a pas été correctement enregistré."
+                )
+
+            # Créer la fiche étudiant.
+            Student.objects.create(
+                user=user,
+                profile=profile,
+                nom=nom,
+                postnom=post_nom,
+                prenom=prenom,
+                sexe=sexe,
+                email=email,
+                niveau=promotion,
+                matricule=matricule,
+                faculte=faculty,
+                academic_year=academic_year,
+                is_active=True,
+            )
 
         return {'success': True}
+
+    except Exception as exc:
+        return {
+            'error': (
+                f'Ligne {line_num} : création annulée. '
+                f'Cause : {str(exc)}'
+            ),
+            'data': row,
+        }
 
 
 # 📌 Activer / Désactiver un étudiant
@@ -546,60 +586,118 @@ def list_users_by_role(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_admin_gestionnaire(request):
-    """Crée un administrateur gestionnaire (Admin Central seulement)"""
-    if not (user_has_role(request.user, 'admin_central') or request.user.is_superuser):
-        return Response({"error": "Permission refusée"}, status=status.HTTP_403_FORBIDDEN)
+    """Crée un administrateur gestionnaire de manière sécurisée."""
+
+    if not (
+        user_has_role(request.user, 'admin_central')
+        or request.user.is_superuser
+    ):
+        return Response(
+            {"error": "Permission refusée"},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     username = request.data.get('username')
     email = request.data.get('email')
     password = request.data.get('password')
-    nom_complet = request.data.get('nom_complet')
+    nom_complet = request.data.get('nom_complet') or ''
 
     if not all([username, email, password]):
-        return Response({"error": "Données manquantes"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Données manquantes"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     if User.objects.filter(username=username).exists():
-        return Response({"error": "Utilisateur déjà existant"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Utilisateur déjà existant"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
-        user = User.objects.create_user(username=username, email=email, password=password)
-        profile = UserProfile.objects.create(user=user, nom_complet=nom_complet)
-        assign_role_to_user(user, 'admin_gestionnaire')
+        with transaction.atomic():
+            # Créer le compte utilisateur.
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password
+            )
 
-        admin_central_user = request.user
-        try:
-            admin_central = AdminCentral.objects.get(user=admin_central_user)
-        except AdminCentral.DoesNotExist:
-            # Si l'utilisateur superuser / admin central n'a pas encore de profil AdminCentral,
-            # créer un enregistrement manquant pour permettre la relation.
-            admin_central_profile = getattr(admin_central_user, 'profile', None)
-            if admin_central_profile is None:
-                admin_central_profile = UserProfile.objects.create(
-                    user=admin_central_user,
-                    nom_complet=admin_central_user.get_full_name() or admin_central_user.username
+            # Créer son profil.
+            profile = UserProfile.objects.create(
+                user=user,
+                nom_complet=nom_complet or username
+            )
+
+            # Attribuer et vérifier le rôle.
+            assign_role_to_user(user, 'admin_gestionnaire')
+
+            profile.refresh_from_db()
+
+            if not profile.role or profile.role.nom != 'admin_gestionnaire':
+                raise ValueError(
+                    "Le rôle administrateur gestionnaire "
+                    "n'a pas été correctement enregistré."
                 )
+
+            # Récupérer ou créer le profil Admin Central.
+            admin_central_user = request.user
+
+            admin_central_profile, _ = UserProfile.objects.get_or_create(
+                user=admin_central_user,
+                defaults={
+                    'nom_complet': (
+                        admin_central_user.get_full_name()
+                        or admin_central_user.username
+                    )
+                }
+            )
+
             admin_central, _ = AdminCentral.objects.get_or_create(
                 user=admin_central_user,
                 defaults={'profile': admin_central_profile}
             )
 
-        AdminGestionnaire.objects.create(user=user, profile=profile, admin_central=admin_central)
+            # Créer le profil administrateur gestionnaire.
+            AdminGestionnaire.objects.create(
+                user=user,
+                profile=profile,
+                admin_central=admin_central
+            )
 
-        return Response({
-            "success": "Administrateur gestionnaire créé",
-            "user_id": user.id,
-            "username": user.username
-        })
+        return Response(
+            {
+                "success": "Administrateur gestionnaire créé",
+                "user_id": user.id,
+                "username": user.username,
+                "role": profile.role.nom,
+            },
+            status=status.HTTP_201_CREATED
+        )
+
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
+
+from django.db import transaction
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_secretaire(request):
-    """Crée un secrétaire facultaire (Admin Gestionnaire ou Admin Central)"""
-    if not (user_has_role(request.user, 'admin_gestionnaire') or user_has_role(request.user, 'admin_central') or request.user.is_superuser):
-        return Response({"error": "Permission refusée"}, status=status.HTTP_403_FORBIDDEN)
+    """Crée un secrétaire facultaire avec un rôle vérifié."""
+
+    if not (
+        user_has_role(request.user, 'admin_gestionnaire')
+        or user_has_role(request.user, 'admin_central')
+        or request.user.is_superuser
+    ):
+        return Response(
+            {"error": "Permission refusée"},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     username = request.data.get('username')
     email = request.data.get('email')
@@ -608,39 +706,79 @@ def create_secretaire(request):
     faculte_code = request.data.get('faculte')
 
     if not all([username, email, password, faculte_code]):
-        return Response({"error": "Données manquantes"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Données manquantes"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     if User.objects.filter(username=username).exists():
-        return Response({"error": "Nom d'utilisateur déjà pris"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Nom d'utilisateur déjà pris"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
         faculty = Faculty.objects.get(code=faculte_code)
     except Faculty.DoesNotExist:
-        return Response({"error": "Faculté introuvable"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Faculté introuvable"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
-        user = User.objects.create_user(username=username, email=email, password=password)
-        profile = UserProfile.objects.create(user=user, nom_complet=nom_complet)
-        assign_role_to_user(user, 'secretaire_facultaire')
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password
+            )
 
-        admin_gestionnaire = AdminGestionnaire.objects.filter(user=request.user).first()
-        SecretaireFacultaire.objects.create(
-            user=user,
-            profile=profile,
-            admin_gestionnaire=admin_gestionnaire,
-            faculte=faculty
-        )
+            profile = UserProfile.objects.create(
+                user=user,
+                nom_complet=nom_complet or ''
+            )
+
+            role_assigne = assign_role_to_user(
+                user, 'secretaire_facultaire'
+            )
+
+            if not role_assigne:
+                raise ValueError(
+                    "Attribution du rôle secrétaire facultaire impossible. "
+                    "Vérifiez le rôle et le groupe dans la base de données."
+                )
+
+            # Vérification supplémentaire du rôle enregistré.
+            profile.refresh_from_db()
+
+            if not profile.role or profile.role.nom != 'secretaire_facultaire':
+                raise ValueError(
+                    "Le rôle secrétaire facultaire n'a pas été enregistré."
+                )
+
+            admin_gestionnaire = AdminGestionnaire.objects.filter(
+                user=request.user
+            ).first()
+
+            SecretaireFacultaire.objects.create(
+                user=user,
+                profile=profile,
+                admin_gestionnaire=admin_gestionnaire,
+                faculte=faculty
+            )
 
         return Response({
             "success": "Secrétaire facultaire créé",
             "user_id": user.id,
-            "username": user.username
-        })
+            "username": user.username,
+            "role": profile.role.nom
+        }, status=status.HTTP_201_CREATED)
+
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# --- Modifier / Supprimer / Activer-Désactiver un Admin Gestionnaire ---
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -935,17 +1073,22 @@ def update_faculty(request, faculty_code):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard_stats(request):
-    """Retourne les statistiques adaptées au rôle de l'utilisateur connecté."""
+    """Retourne les statistiques adaptées au rôle de l'utilisateur."""
+
     user = request.user
+
     try:
         profile = user.profile
         role = profile.role.nom if profile.role else None
     except UserProfile.DoesNotExist:
         role = None
 
-    is_central = user_has_role(user, 'admin_central') or user.is_superuser
+    is_central = (
+        user_has_role(user, 'admin_central')
+        or user.is_superuser
+    )
 
-    # ── Admin Central ────────────────────────────────────────────────────────
+    # Admin Central
     if is_central:
         total_users = User.objects.count()
         total_gestionnaires = AdminGestionnaire.objects.count()
@@ -953,15 +1096,16 @@ def dashboard_stats(request):
         total_professors = Professor.objects.count()
         total_students = Student.objects.count()
         total_faculties = Faculty.objects.count()
-        total_roles = Role.objects.count()
 
-        # Répartition étudiants par faculté
         students_by_faculty = list(
-            Student.objects.values('faculte__nom').annotate(count=Count('id'))
+            Student.objects.values('faculte__nom')
+            .annotate(count=Count('id'))
             .order_by('-count')
         )
+
         professors_by_faculty = list(
-            Professor.objects.values('faculte__nom').annotate(count=Count('id'))
+            Professor.objects.values('faculte__nom')
+            .annotate(count=Count('id'))
             .order_by('-count')
         )
 
@@ -981,27 +1125,43 @@ def dashboard_stats(request):
             }
         })
 
-    # ── Admin Gestionnaire ───────────────────────────────────────────────────
+    # Admin Gestionnaire
     if role == 'admin_gestionnaire':
-        gestionnaire = AdminGestionnaire.objects.filter(user=user).first()
-        if gestionnaire:
-            secretaires = SecretaireFacultaire.objects.filter(admin_gestionnaire=gestionnaire)
-            nb_secretaires = secretaires.count()
-            # Facultés distinctes gérées
-            faculties = Faculty.objects.filter(secretaires__admin_gestionnaire=gestionnaire).distinct()
-            nb_faculties = faculties.count()
-            # Professeurs enregistrés par ces secrétaires
-            nb_professors = Professor.objects.filter(enregistre_par__in=secretaires).count()
+        gestionnaire = AdminGestionnaire.objects.filter(
+            user=user
+        ).first()
 
-            secretaires_list = []
-            for sec in secretaires:
-                secretaires_list.append({
+        if gestionnaire:
+            secretaires = SecretaireFacultaire.objects.filter(
+                admin_gestionnaire=gestionnaire
+            )
+
+            nb_secretaires = secretaires.count()
+
+            faculties = Faculty.objects.filter(
+                secretaires__admin_gestionnaire=gestionnaire
+            ).distinct()
+
+            nb_faculties = faculties.count()
+
+            nb_professors = Professor.objects.filter(
+                enregistre_par__in=secretaires
+            ).count()
+
+            secretaires_list = [
+                {
                     'nom': sec.profile.nom_complet or sec.user.username,
                     'faculte': sec.faculte.nom if sec.faculte else '-',
-                    'nb_professors': Professor.objects.filter(enregistre_par=sec).count(),
-                })
+                    'nb_professors': Professor.objects.filter(
+                        enregistre_par=sec
+                    ).count(),
+                }
+                for sec in secretaires
+            ]
         else:
-            nb_secretaires = nb_faculties = nb_professors = 0
+            nb_secretaires = 0
+            nb_faculties = 0
+            nb_professors = 0
             secretaires_list = []
 
         return Response({
@@ -1016,24 +1176,39 @@ def dashboard_stats(request):
             }
         })
 
-    # ── Secrétaire Facultaire ────────────────────────────────────────────────
+    # Secrétaire Facultaire
     if role == 'secretaire_facultaire':
-        secretaire = SecretaireFacultaire.objects.filter(user=user).first()
+        secretaire = SecretaireFacultaire.objects.filter(
+            user=user
+        ).first()
+
         if secretaire:
             faculte = secretaire.faculte
-            nb_professors = Professor.objects.filter(faculte=faculte).count()
-            from courses.models import Course, CourseNote
-            nb_courses = Course.objects.filter(faculte=faculte).count()
-            nb_students = Student.objects.filter(faculte=faculte).count()
+
+            nb_professors = Professor.objects.filter(
+                faculte=faculte
+            ).count()
+
+            from courses.models import Course
+
+            nb_courses = Course.objects.filter(
+                faculte=faculte
+            ).count()
+
+            nb_students = Student.objects.filter(
+                faculte=faculte
+            ).count()
 
             professors_list = list(
                 Professor.objects.filter(faculte=faculte)
                 .values('nom', 'specialite', 'email')[:10]
             )
         else:
-            nb_professors = nb_courses = nb_students = 0
-            professors_list = []
             faculte = None
+            nb_professors = 0
+            nb_courses = 0
+            nb_students = 0
+            professors_list = []
 
         return Response({
             'role': 'secretaire_facultaire',
@@ -1048,24 +1223,37 @@ def dashboard_stats(request):
             }
         })
 
-    # ── Professeur ───────────────────────────────────────────────────────────
+    # Professeur
     if role == 'professeur':
-        professor = Professor.objects.filter(user=user).first()
+        professor = Professor.objects.filter(
+            user=user
+        ).first()
+
         if professor:
             from courses.models import Course, CourseNote
-            nb_courses = Course.objects.filter(enseignants=professor).count()
-            nb_notes = CourseNote.objects.filter(professor=professor).count()
+
+            nb_courses = Course.objects.filter(
+                enseignants=professor
+            ).count()
+
+            nb_notes = CourseNote.objects.filter(
+                professor=professor
+            ).count()
+
             courses_list = list(
                 Course.objects.filter(enseignants=professor)
                 .values('id', 'titre', 'date_creation')[:10]
             )
+
             recent_notes = list(
                 CourseNote.objects.filter(professor=professor)
                 .values('title', 'created_at')[:5]
             )
         else:
-            nb_courses = nb_notes = 0
-            courses_list = recent_notes = []
+            nb_courses = 0
+            nb_notes = 0
+            courses_list = []
+            recent_notes = []
 
         return Response({
             'role': 'professeur',
@@ -1079,15 +1267,23 @@ def dashboard_stats(request):
             }
         })
 
-    # ── Étudiant ─────────────────────────────────────────────────────────────
-    if role == 'etudiant' or (not role and not user.is_staff):
+    # Étudiant : uniquement si le rôle est réellement étudiant.
+    if role == 'etudiant':
         student = Student.objects.filter(user=user).first()
+
         from chatbot.models import Conversation
-        nb_conversations = Conversation.objects.filter(user=user).count() if user else 0
         from courses.models import Course
-        nb_courses = Course.objects.count()  # visible courses
+
+        nb_conversations = Conversation.objects.filter(
+            user=user
+        ).count()
+
+        nb_courses = Course.objects.count()
+
         if student and student.faculte:
-            nb_courses_faculty = Course.objects.filter(faculte=student.faculte).count()
+            nb_courses_faculty = Course.objects.filter(
+                faculte=student.faculte
+            ).count()
         else:
             nb_courses_faculty = 0
 
@@ -1096,7 +1292,11 @@ def dashboard_stats(request):
             'student': {
                 'nom': student.nom if student else user.username,
                 'niveau': student.niveau if student else '-',
-                'faculte': student.faculte.nom if student and student.faculte else '-',
+                'faculte': (
+                    student.faculte.nom
+                    if student and student.faculte
+                    else '-'
+                ),
                 'matricule': student.matricule if student else '-',
             },
             'stats': [
@@ -1107,5 +1307,22 @@ def dashboard_stats(request):
             'charts': {}
         })
 
-    # Fallback
-    return Response({'role': role or 'unknown', 'stats': [], 'charts': {}})
+    # Aucun rôle attribué : ne pas considérer automatiquement
+    # ce compte comme un étudiant.
+    if not role:
+        return Response(
+            {
+                'error': (
+                    "Aucun rôle n'est attribué à ce compte. "
+                    "Contactez l'administrateur."
+                )
+            },
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Rôle existant mais non géré par ce tableau de bord.
+    return Response({
+        'role': role,
+        'stats': [],
+        'charts': {},
+    })

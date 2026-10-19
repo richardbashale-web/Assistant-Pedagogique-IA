@@ -2,92 +2,70 @@ import { useState } from "react";
 import logoUwb from "./logo-uwb.webp";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
-console.log("API utilisée par React :", API_BASE_URL);
 
 function Login({ setToken }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!username || !password) {
+    if (!username.trim() || !password) {
       alert("Veuillez remplir tous les champs.");
+      return;
+    }
+
+    if (!API_BASE_URL) {
+      alert("Configuration du serveur manquante.");
       return;
     }
 
     setLoading(true);
 
     try {
-      console.log("=== TEST CONNEXION ===");
-      console.log("API_BASE_URL :", API_BASE_URL);
-      console.log("URL finale :", `${API_BASE_URL}/api/token/`);
-      console.log("Username :", username);
+      const apiUrl = API_BASE_URL.replace(/\/+$/, "");
 
-      const response = await fetch(`${API_BASE_URL}/api/token/`, {
+      const response = await fetch(`${apiUrl}/api/token/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: username,
+          username: username.trim(),
           password: password,
         }),
       });
 
-      console.log("FETCH TERMINÉ");
-      console.log("Status :", response.status);
-      console.log("OK :", response.ok);
-      console.log(
-        "Content-Type :",
-        response.headers.get("content-type")
-      );
-
       const text = await response.text();
-
-      console.log("Réponse brute :", text);
-
       let data;
 
       try {
         data = JSON.parse(text);
-      } catch (e) {
-        console.error("La réponse n'est pas du JSON :", e);
-        alert(
-          "Le serveur a renvoyé une réponse qui n'est pas du JSON."
-        );
+      } catch {
+        console.error("Réponse serveur invalide :", text);
+        alert("Le serveur a renvoyé une réponse inattendue.");
         return;
       }
 
-      console.log("Réponse JSON :", data);
-
       if (response.ok && data.access) {
-        setToken(data.access);
         localStorage.setItem("token", data.access);
 
         if (data.refresh) {
           localStorage.setItem("refreshToken", data.refresh);
         }
 
-        console.log("Connexion réussie !");
+        setToken(data.access);
+      } else if (response.status === 401) {
+        alert("Nom d'utilisateur ou mot de passe incorrect.");
       } else {
-        console.error("Erreur serveur :", data);
-
-        if (response.status === 401) {
-          alert("Nom d'utilisateur ou mot de passe incorrect.");
-        } else {
-          alert(
-            data.detail ||
-              "Erreur lors de la connexion. Veuillez réessayer."
-          );
-        }
+        alert(
+          data.detail ||
+            "Erreur lors de la connexion. Veuillez réessayer."
+        );
       }
     } catch (error) {
-      console.error("ERREUR FETCH :", error);
-      console.error("Message :", error.message);
-
-      alert(
-        "Impossible de contacter le serveur : " + error.message
-      );
+      console.error("Erreur de connexion :", error);
+      alert("Impossible de contacter le serveur. Vérifiez votre connexion.");
     } finally {
       setLoading(false);
     }
@@ -101,48 +79,105 @@ function Login({ setToken }) {
         aria-hidden="true"
         style={styles.backgroundLogo}
       />
+
       <div style={styles.card}>
         <img src={logoUwb} alt="Logo UWB" style={styles.panelLogo} />
-        <h2 style={styles.title}>Connexion </h2>
+
+        <h2 style={styles.title}>Connexion</h2>
 
         <p style={styles.subtitle}>
           Accédez à votre assistant pédagogique
         </p>
 
-        <div style={styles.inputGroup}>
-          <input
-            type="text"
-            placeholder="Nom d'utilisateur"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={styles.input}
-            disabled={loading}
-          />
-        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
 
-        <div style={styles.inputGroup}>
-          <input
-            type="password"
-            placeholder="Mot de passe"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={styles.input}
-            disabled={loading}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleLogin();
-              }
-            }}
-          />
-        </div>
-
-        <button
-          onClick={handleLogin}
-          style={styles.button}
-          disabled={loading}
+            if (!loading) {
+              handleLogin();
+            }
+          }}
         >
-          {loading ? "Connexion..." : "Se connecter"}
-        </button>
+          <div style={styles.inputGroup}>
+            <input
+              type="text"
+              placeholder="Nom d'utilisateur"
+              aria-label="Nom d'utilisateur"
+              autoComplete="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              style={styles.input}
+              disabled={loading}
+              required
+            />
+          </div>
+
+          <div style={styles.inputGroup}>
+            <div style={styles.passwordContainer}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Mot de passe"
+                aria-label="Mot de passe"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                style={styles.passwordInput}
+                disabled={loading}
+                required
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPassword((previous) => !previous)}
+                style={styles.eyeButton}
+                aria-label={
+                  showPassword
+                    ? "Masquer le mot de passe"
+                    : "Afficher le mot de passe"
+                }
+                aria-pressed={showPassword}
+                disabled={loading}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="22"
+                  height="22"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  {showPassword ? (
+                    <>
+                      <path d="M3 3l18 18" />
+                      <path d="M10.6 10.6a2 2 0 002.8 2.8" />
+                      <path d="M9.9 5.2A10.8 10.8 0 0112 5c5 0 8.5 4.5 9 7-.2 1.1-1 2.5-2.2 3.7" />
+                      <path d="M6.2 6.2C3.8 7.8 2.3 10.2 2 12c.5 2.5 4 7 10 7 1.4 0 2.6-.3 3.7-.8" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </>
+                  )}
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            style={{
+              ...styles.button,
+              ...(loading ? styles.buttonDisabled : {}),
+            }}
+            disabled={loading}
+          >
+            {loading ? "Connexion..." : "Se connecter"}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -157,7 +192,8 @@ const styles = {
     padding: "20px",
     boxSizing: "border-box",
     backgroundColor: "#f9fafb",
-    backgroundImage: "linear-gradient(135deg, rgba(239,246,255,0.88), rgba(248,250,252,0.94))",
+    backgroundImage:
+      "linear-gradient(135deg, rgba(239,246,255,0.88), rgba(248,250,252,0.94))",
     fontFamily: "'Inter', sans-serif",
     position: "relative",
     overflow: "hidden",
@@ -224,6 +260,36 @@ const styles = {
     boxSizing: "border-box",
   },
 
+  passwordContainer: {
+    position: "relative",
+    width: "100%",
+  },
+
+  passwordInput: {
+    width: "100%",
+    padding: "12px 48px 12px 16px",
+    borderRadius: "10px",
+    border: "1px solid #d1d5db",
+    fontSize: "15px",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+
+  eyeButton: {
+    position: "absolute",
+    right: "12px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "4px",
+    border: "none",
+    background: "transparent",
+    color: "#4b5563",
+    cursor: "pointer",
+  },
+
   button: {
     width: "100%",
     padding: "12px",
@@ -235,6 +301,11 @@ const styles = {
     cursor: "pointer",
     fontSize: "16px",
     marginTop: "10px",
+  },
+
+  buttonDisabled: {
+    opacity: 0.65,
+    cursor: "not-allowed",
   },
 };
 

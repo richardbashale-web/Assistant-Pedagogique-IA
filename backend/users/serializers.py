@@ -7,19 +7,13 @@ from .permissions import assign_role_to_user
 
 
 class StudentSerializer(serializers.ModelSerializer):
-    # Identifiants du compte Django
-    username = serializers.CharField(
-        write_only=True,
-        required=False
-    )
-
+    username = serializers.CharField(write_only=True, required=False)
     password = serializers.CharField(
         write_only=True,
         required=False,
         min_length=8
     )
 
-    # Username visible en lecture
     user_username = serializers.CharField(
         source='user.username',
         read_only=True
@@ -28,13 +22,11 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = '__all__'
-
         extra_kwargs = {
             'matricule': {'required': True},
         }
 
     def validate_matricule(self, value):
-        """Vérifie que le matricule n'est pas déjà utilisé."""
         qs = Student.objects.filter(matricule=value)
 
         if self.instance:
@@ -48,7 +40,6 @@ class StudentSerializer(serializers.ModelSerializer):
         return value
 
     def validate_username(self, value):
-        """Vérifie l'unicité du username Django."""
         qs = User.objects.filter(username=value)
 
         if self.instance and self.instance.user:
@@ -62,7 +53,6 @@ class StudentSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        """Vérifie que l'email n'est pas déjà utilisé."""
         qs = User.objects.filter(email=value)
 
         if self.instance and self.instance.user:
@@ -76,10 +66,6 @@ class StudentSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """
-        Lors d'une création, username et password sont obligatoires.
-        Lors d'une modification, ils deviennent facultatifs.
-        """
         if not self.instance:
             if not attrs.get('username'):
                 raise serializers.ValidationError({
@@ -104,7 +90,7 @@ class StudentSerializer(serializers.ModelSerializer):
         postnom = validated_data.get('postnom', '')
         telephone = validated_data.get('telephone', '')
 
-        # Création du compte Django
+        # Créer le compte Django.
         user = User.objects.create_user(
             username=username,
             email=email,
@@ -113,22 +99,28 @@ class StudentSerializer(serializers.ModelSerializer):
             last_name=f"{nom} {postnom}".strip(),
         )
 
-        # Création du profil utilisateur
+        # Créer le profil.
         nom_complet = " ".join(
             filter(None, [nom, postnom, prenom])
         )
 
         profile = UserProfile.objects.create(
             user=user,
-            nom_complet=nom_complet,
+            nom_complet=nom_complet or username,
             telephone=telephone,
             est_actif=True,
         )
 
-        # Attribution du rôle
+        # Attribuer et vérifier le rôle étudiant.
         assign_role_to_user(user, 'etudiant')
+        profile.refresh_from_db()
 
-        # Création de l'étudiant
+        if not profile.role or profile.role.nom != 'etudiant':
+            raise serializers.ValidationError(
+                "Impossible d'attribuer le rôle étudiant à ce compte."
+            )
+
+        # Créer l'étudiant seulement si le rôle est correct.
         student = Student.objects.create(
             user=user,
             profile=profile,
@@ -145,7 +137,6 @@ class StudentSerializer(serializers.ModelSerializer):
         user = instance.user
 
         if user:
-            # Username
             if username and username != user.username:
                 if User.objects.filter(
                     username=username
@@ -157,51 +148,30 @@ class StudentSerializer(serializers.ModelSerializer):
 
                 user.username = username
 
-            # Password
             if password:
                 user.set_password(password)
 
-            # Email
             if 'email' in validated_data:
                 user.email = validated_data['email']
 
-            # Prénom
             if 'prenom' in validated_data:
                 user.first_name = validated_data['prenom']
 
-            # Nom / postnom
-            if (
-                'nom' in validated_data
-                or 'postnom' in validated_data
-            ):
+            if 'nom' in validated_data or 'postnom' in validated_data:
                 nom = validated_data.get('nom', instance.nom)
-                postnom = validated_data.get(
-                    'postnom',
-                    instance.postnom
-                )
-
+                postnom = validated_data.get('postnom', instance.postnom)
                 user.last_name = f"{nom} {postnom}".strip()
 
             user.save()
 
-            # Mise à jour du UserProfile
             if instance.profile:
                 nom_complet = " ".join(
                     filter(
                         None,
                         [
-                            validated_data.get(
-                                'nom',
-                                instance.nom
-                            ),
-                            validated_data.get(
-                                'postnom',
-                                instance.postnom
-                            ),
-                            validated_data.get(
-                                'prenom',
-                                instance.prenom
-                            ),
+                            validated_data.get('nom', instance.nom),
+                            validated_data.get('postnom', instance.postnom),
+                            validated_data.get('prenom', instance.prenom),
                         ]
                     )
                 )
@@ -209,29 +179,20 @@ class StudentSerializer(serializers.ModelSerializer):
                 instance.profile.nom_complet = nom_complet
 
                 if 'telephone' in validated_data:
-                    instance.profile.telephone = validated_data[
-                        'telephone'
-                    ]
+                    instance.profile.telephone = validated_data['telephone']
 
                 instance.profile.save()
 
         return super().update(instance, validated_data)
 
-
 class ProfessorSerializer(serializers.ModelSerializer):
-    # Identifiants du compte Django
-    username = serializers.CharField(
-        write_only=True,
-        required=False
-    )
-
+    username = serializers.CharField(write_only=True, required=False)
     password = serializers.CharField(
         write_only=True,
         required=False,
         min_length=8
     )
 
-    # Username visible dans les réponses GET
     user_username = serializers.CharField(
         source='user.username',
         read_only=True
@@ -242,7 +203,6 @@ class ProfessorSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate_username(self, value):
-        """Vérifie l'unicité du username Django."""
         qs = User.objects.filter(username=value)
 
         if self.instance and self.instance.user:
@@ -256,7 +216,6 @@ class ProfessorSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        """Vérifie l'unicité de l'email."""
         qs = User.objects.filter(email=value)
 
         if self.instance and self.instance.user:
@@ -270,15 +229,6 @@ class ProfessorSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """
-        Création :
-            username obligatoire
-            password obligatoire
-
-        Modification :
-            username facultatif
-            password facultatif
-        """
         if not self.instance:
             if not attrs.get('username'):
                 raise serializers.ValidationError({
@@ -287,8 +237,7 @@ class ProfessorSerializer(serializers.ModelSerializer):
 
             if not attrs.get('password'):
                 raise serializers.ValidationError({
-                    'password':
-                        "Le mot de passe est obligatoire."
+                    'password': "Le mot de passe est obligatoire."
                 })
 
         return attrs
@@ -304,7 +253,6 @@ class ProfessorSerializer(serializers.ModelSerializer):
         postnom = validated_data.get('postnom', '')
         telephone = validated_data.get('telephone', '')
 
-        # Création du compte Django
         user = User.objects.create_user(
             username=username,
             email=email,
@@ -313,22 +261,26 @@ class ProfessorSerializer(serializers.ModelSerializer):
             last_name=f"{nom} {postnom}".strip(),
         )
 
-        # Création du profil
         nom_complet = " ".join(
             filter(None, [nom, postnom, prenom])
         )
 
         profile = UserProfile.objects.create(
             user=user,
-            nom_complet=nom_complet,
+            nom_complet=nom_complet or username,
             telephone=telephone,
             est_actif=True,
         )
 
-        # Attribution du rôle professeur
+        # Attribuer et vérifier le rôle avant de créer le professeur.
         assign_role_to_user(user, 'professeur')
+        profile.refresh_from_db()
 
-        # Création du professeur
+        if not profile.role or profile.role.nom != 'professeur':
+            raise serializers.ValidationError(
+                "Impossible d'attribuer le rôle professeur à ce compte."
+            )
+
         professor = Professor.objects.create(
             user=user,
             profile=profile,
@@ -345,7 +297,6 @@ class ProfessorSerializer(serializers.ModelSerializer):
         user = instance.user
 
         if user:
-            # Modification du username
             if username and username != user.username:
                 if User.objects.filter(
                     username=username
@@ -357,55 +308,30 @@ class ProfessorSerializer(serializers.ModelSerializer):
 
                 user.username = username
 
-            # Modification du password
             if password:
                 user.set_password(password)
 
-            # Email
             if 'email' in validated_data:
                 user.email = validated_data['email']
 
-            # Prénom
             if 'prenom' in validated_data:
                 user.first_name = validated_data['prenom']
 
-            # Nom + postnom
-            if (
-                'nom' in validated_data
-                or 'postnom' in validated_data
-            ):
-                nom = validated_data.get(
-                    'nom',
-                    instance.nom
-                )
-
-                postnom = validated_data.get(
-                    'postnom',
-                    instance.postnom
-                )
-
+            if 'nom' in validated_data or 'postnom' in validated_data:
+                nom = validated_data.get('nom', instance.nom)
+                postnom = validated_data.get('postnom', instance.postnom)
                 user.last_name = f"{nom} {postnom}".strip()
 
             user.save()
 
-            # Mise à jour du profil
             if instance.profile:
                 nom_complet = " ".join(
                     filter(
                         None,
                         [
-                            validated_data.get(
-                                'nom',
-                                instance.nom
-                            ),
-                            validated_data.get(
-                                'postnom',
-                                instance.postnom
-                            ),
-                            validated_data.get(
-                                'prenom',
-                                instance.prenom
-                            ),
+                            validated_data.get('nom', instance.nom),
+                            validated_data.get('postnom', instance.postnom),
+                            validated_data.get('prenom', instance.prenom),
                         ]
                     )
                 )
@@ -413,9 +339,7 @@ class ProfessorSerializer(serializers.ModelSerializer):
                 instance.profile.nom_complet = nom_complet
 
                 if 'telephone' in validated_data:
-                    instance.profile.telephone = validated_data[
-                        'telephone'
-                    ]
+                    instance.profile.telephone = validated_data['telephone']
 
                 instance.profile.save()
 
