@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import FacultySelector from "./FacultySelector";
 import { useToast } from "./Toast";
 
@@ -6,7 +6,7 @@ function ManageProfessors({ token, secretaryMode = false }) {
   const [nom, setNom] = useState("");
   const [postnom, setPostnom] = useState("");
   const [prenom, setPrenom] = useState("");
-  const [sexe, setSexe] = useState("");
+  const [sexe, setSexe] = useState("M");
   const [email, setEmail] = useState("");
   const [specialite, setSpecialite] = useState("");
   const [grade, setGrade] = useState("");
@@ -24,6 +24,7 @@ function ManageProfessors({ token, secretaryMode = false }) {
   const [search, setSearch] = useState("");
 
   const { toastContainer, showToast } = useToast();
+  const nomInputRef = useRef(null);
 
   const API_BASE_URL =
     process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
@@ -65,6 +66,13 @@ function ManageProfessors({ token, secretaryMode = false }) {
     }
   }, [token, fetchProfessors]);
 
+  useEffect(() => {
+    if (editingId && nomInputRef.current) {
+      nomInputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      nomInputRef.current.focus();
+    }
+  }, [editingId]);
+
   // Récupération de la faculté de la secrétaire
   useEffect(() => {
     if (!secretaryMode || !token) return;
@@ -94,7 +102,7 @@ function ManageProfessors({ token, secretaryMode = false }) {
     setNom("");
     setPostnom("");
     setPrenom("");
-    setSexe("");
+    setSexe("M");
     setEmail("");
     setSpecialite("");
     setGrade("");
@@ -198,43 +206,28 @@ function ManageProfessors({ token, secretaryMode = false }) {
 
         await fetchProfessors();
       } else {
+        const responseText = await res.text();
         let err = {};
-
         try {
-          err = await res.json();
+          err = JSON.parse(responseText);
         } catch {
-          err = {};
+          err = {
+            detail: `Le serveur a répondu avec le statut HTTP ${res.status}.`,
+            response: responseText,
+          };
         }
 
-        let msg = "Opération impossible.";
-
-        if (err.error) {
-          msg = err.error;
-        } else if (err.detail) {
-          msg = err.detail;
-        } else if (typeof err === "object") {
-          const messages = [];
-
-          Object.entries(err).forEach(
-            ([field, errors]) => {
-              if (Array.isArray(errors)) {
-                messages.push(
-                  `${field}: ${errors.join(" ")}`
-                );
-              } else if (typeof errors === "string") {
-                messages.push(
-                  `${field}: ${errors}`
-                );
-              }
-            }
+        console.error(
+          `Erreur API enseignant (HTTP ${res.status}) :`,
+          err
+        );
+        const fieldErrors = Object.entries(err)
+          .filter(([key]) => key !== "detail" && key !== "response")
+          .map(([field, errors]) =>
+            `${field}: ${Array.isArray(errors) ? errors.join(" ") : errors}`
           );
-
-          if (messages.length > 0) {
-            msg = messages.join(" | ");
-          }
-        }
-
-        showToast(`Erreur : ${msg}`, "error");
+        const msg = err.error || fieldErrors.join(" | ") || err.detail || "Opération impossible.";
+        showToast(`${editingId ? "Modification" : "Création"} impossible (HTTP ${res.status}) : ${msg}`, "error");
       }
     } catch (error) {
       console.error(error);
@@ -267,10 +260,6 @@ function ManageProfessors({ token, secretaryMode = false }) {
 
     setEditingId(p.id);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
   };
 
   const deleteProfessor = async (id) => {
@@ -414,6 +403,7 @@ function ManageProfessors({ token, secretaryMode = false }) {
           <label className="field-label">
             Nom *
             <input
+              ref={nomInputRef}
               placeholder="Ex: Bashale"
               value={nom}
               onChange={(e) =>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "./Toast";
 
 function ManageGestionnaires({ token }) {
@@ -12,6 +12,7 @@ function ManageGestionnaires({ token }) {
   const [fetching, setFetching] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
   const { toastContainer, showToast } = useToast();
+  const nomCompletInputRef = useRef(null);
 
   const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
   const CREATE_API_URL = `${API_BASE_URL}/api/admin-gestionnaire/create/`;
@@ -34,6 +35,13 @@ function ManageGestionnaires({ token }) {
   useEffect(() => {
     if (token) fetchGestionnaires();
   }, [token, fetchGestionnaires]);
+
+  useEffect(() => {
+    if (editingId && nomCompletInputRef.current) {
+      nomCompletInputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      nomCompletInputRef.current.focus();
+    }
+  }, [editingId]);
 
   const resetForm = () => {
     setUsername(""); setEmail(""); setPassword(""); setNom_complet(""); setEditingId(null);
@@ -96,7 +104,6 @@ function ManageGestionnaires({ token }) {
     setNom_complet(g.nom_complet || "");
     setPassword("");
     setEditingId(g.user__id);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const deleteGestionnaire = async (g) => {
@@ -108,10 +115,20 @@ function ManageGestionnaires({ token }) {
       });
       if (res.ok) { showToast("Gestionnaire supprimé.", "success"); fetchGestionnaires(); }
       else {
-        const err = await res.json();
-        showToast(err.error || "Erreur lors de la suppression.", "error");
+        const responseText = await res.text();
+        let errorMessage = responseText || `Erreur lors de la suppression (HTTP ${res.status}).`;
+        try {
+          const error = JSON.parse(responseText);
+          errorMessage = error.error || error.detail || errorMessage;
+        } catch {
+          // Preserve non-JSON server responses so they are not reported as network failures.
+        }
+        showToast(errorMessage, "error");
       }
-    } catch { showToast("Erreur réseau.", "error"); }
+    } catch (error) {
+      console.error("Gestionnaire delete exception", error);
+      showToast("Erreur réseau lors de la suppression du gestionnaire.", "error");
+    }
   };
 
   const toggleGestionnaireActive = async (g) => {
@@ -155,7 +172,7 @@ function ManageGestionnaires({ token }) {
           </label>
           <label className="field-label">
             Nom complet
-            <input placeholder="Ex: Richard Bashale" value={nom_complet} onChange={e => setNom_complet(e.target.value)} disabled={loading} />
+            <input ref={nomCompletInputRef} placeholder="Ex: Richard Bashale" value={nom_complet} onChange={e => setNom_complet(e.target.value)} disabled={loading} />
           </label>
           <label className="field-label">
             Adresse email

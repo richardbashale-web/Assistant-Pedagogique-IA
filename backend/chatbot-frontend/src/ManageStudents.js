@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import FacultySelector from "./FacultySelector";
 import { useToast } from "./Toast";
 import ImportStudentsModal from "./ImportStudentsModal";
@@ -35,6 +35,7 @@ function ManageStudents({ token }) {
   const [togglingId, setTogglingId] = useState(null);
 
   const { toastContainer, showToast } = useToast();
+  const nomInputRef = useRef(null);
 
   // ============================================================
   // RÉCUPÉRATION DES ÉTUDIANTS
@@ -76,6 +77,13 @@ function ManageStudents({ token }) {
       fetchStudents();
     }
   }, [token, fetchStudents]);
+
+  useEffect(() => {
+    if (editingId && nomInputRef.current) {
+      nomInputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      nomInputRef.current.focus();
+    }
+  }, [editingId]);
 
   // ============================================================
   // RÉINITIALISATION DU FORMULAIRE
@@ -210,27 +218,31 @@ function ManageStudents({ token }) {
         resetForm();
         fetchStudents();
       } else {
-        const error = await res.json();
+        const responseText = await res.text();
+        let error = {};
+        try {
+          error = JSON.parse(responseText);
+        } catch {
+          error = {
+            detail: `Le serveur a répondu avec le statut HTTP ${res.status}.`,
+            response: responseText,
+          };
+        }
 
         console.error(
-          "Erreur backend :",
+          `Erreur API étudiant (HTTP ${res.status}) :`,
           error
         );
 
-        // Gestion des différentes erreurs DRF
-        const msg =
-          error.username?.[0] ||
-          error.password?.[0] ||
-          error.matricule?.[0] ||
-          error.email?.[0] ||
-          error.nom?.[0] ||
-          error.niveau?.[0] ||
-          error.faculte?.[0] ||
-          error.detail ||
-          "Opération impossible.";
+        const fieldErrors = Object.entries(error)
+          .filter(([key]) => key !== "detail" && key !== "response")
+          .map(([field, messages]) =>
+            `${field}: ${Array.isArray(messages) ? messages.join(" ") : messages}`
+          );
+        const msg = fieldErrors.join(" | ") || error.detail || "Opération impossible.";
 
         showToast(
-          `Erreur : ${msg}`,
+          `${editingId ? "Modification" : "Création"} impossible (HTTP ${res.status}) : ${msg}`,
           "error"
         );
       }
@@ -272,10 +284,6 @@ function ManageStudents({ token }) {
 
     setEditingId(student.id);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
   };
 
   // ============================================================
@@ -497,6 +505,7 @@ function ManageStudents({ token }) {
             Nom *
 
             <input
+              ref={nomInputRef}
               placeholder="Ex: Kabongo"
               value={nom}
               onChange={(e) =>

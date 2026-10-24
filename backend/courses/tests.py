@@ -3,12 +3,12 @@ import os
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from .models import Course, CourseNote
 from .serializers import CourseSerializer
-from .views import CourseNoteListCreateView
-from users.models import Faculty, Professor, Role, UserProfile
+from .views import CourseAssignmentView, CourseNoteListCreateView
+from users.models import Faculty, Professor, Role, SecretaireFacultaire, UserProfile
 
 
 class CourseSerializerTests(TestCase):
@@ -177,3 +177,91 @@ class CourseNoteViewTests(TestCase):
 
         note.delete()
         self.assertFalse(os.path.exists(attachment_path))
+
+
+class CourseAssignmentViewTests(TestCase):
+    def setUp(self):
+        self.faculty_a = Faculty.objects.create(code='droit', nom='Droit')
+        self.faculty_b = Faculty.objects.create(code='medecine', nom='Médecine')
+        secretary_role = Role.objects.create(
+            nom='secretaire_facultaire',
+            description='Secrétaire facultaire'
+        )
+        professor_role = Role.objects.create(
+            nom='professeur',
+            description='Professeur'
+        )
+
+        secretary_user = User.objects.create_user(
+            username='secretary_droit',
+            password='secret123'
+        )
+        secretary_profile = UserProfile.objects.create(
+            user=secretary_user,
+            role=secretary_role,
+            nom_complet='Secrétaire Droit'
+        )
+        self.secretary = SecretaireFacultaire.objects.create(
+            user=secretary_user,
+            profile=secretary_profile,
+            faculte=self.faculty_a
+        )
+
+        teacher_user = User.objects.create_user(
+            username='teacher_medicine',
+            password='secret123'
+        )
+        teacher_profile = UserProfile.objects.create(
+            user=teacher_user,
+            role=professor_role,
+            nom_complet='Enseignant Médecine'
+        )
+        self.teacher = Professor.objects.create(
+            user=teacher_user,
+            profile=teacher_profile,
+            nom='Enseignant',
+            email='teacher.medicine@example.com',
+            specialite='Anatomie',
+            faculte=self.faculty_b
+        )
+
+        self.course = Course.objects.create(
+            titre='Cours partagé',
+            description='Cours de la faculté de droit',
+            faculte=self.faculty_a,
+            promotions=['L1']
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=secretary_user)
+
+    def test_secretary_can_assign_own_faculty_course_to_other_faculty_teacher(self):
+        response = self.client.post(
+            f'/api/courses/{self.course.id}/assignments/',
+            {'enseignants': [self.teacher.id], 'promotions': ['L1']},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            list(self.course.enseignants.values_list('id', flat=True)),
+            [self.teacher.id]
+        )
+        self.course.refresh_from_db()
+        self.assertEqual(self.course.professeur_id, self.teacher.id)
+
+    def test_secretary_cannot_assign_course_from_another_faculty(self):
+        other_faculty_course = Course.objects.create(
+            titre='Cours médecine',
+            description='Cours réservé à une autre faculté',
+            faculte=self.faculty_b,
+            promotions=['L1']
+        )
+
+        response = self.client.post(
+            f'/api/courses/{other_faculty_course.id}/assignments/',
+            {'enseignants': [self.teacher.id], 'promotions': ['L1']},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(other_faculty_course.enseignants.exists())

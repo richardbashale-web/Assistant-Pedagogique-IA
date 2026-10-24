@@ -201,6 +201,9 @@ class ProfessorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Professor
         fields = '__all__'
+        extra_kwargs = {
+            'sexe': {'required': False, 'allow_blank': True},
+        }
 
     def validate_username(self, value):
         qs = User.objects.filter(username=value)
@@ -227,6 +230,9 @@ class ProfessorSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+    def validate_sexe(self, value):
+        return value or 'M'
 
     def validate(self, attrs):
         if not self.instance:

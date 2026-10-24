@@ -89,10 +89,13 @@ function CourseAssignments({ token }) {
 
           {selectedCourse && <>
             <div className="field-label field-full">Enseignants
+              <p style={{ color: "var(--text-muted)", fontSize: "13px", margin: "4px 0 10px" }}>
+                Vous pouvez sélectionner un enseignant d'une autre faculté.
+              </p>
               <div className="selection-list">
                 {teachers.map((teacher) => <label key={teacher.id} className="selection-item">
                   <input type="checkbox" checked={teacherIds.includes(String(teacher.id))} onChange={() => toggleTeacher(teacher.id)} disabled={loading} />
-                  <span>{teacher.nom} — {teacher.specialite || "Sans spécialité"}</span>
+                  <span>{teacher.nom} — {teacher.specialite || "Sans spécialité"} ({teacher.faculte || "Faculté non renseignée"})</span>
                 </label>)}
               </div>
             </div>

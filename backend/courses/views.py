@@ -190,9 +190,9 @@ class CourseAssignmentView(APIView):
         if not isinstance(teacher_ids, list) or not isinstance(promotions, list):
             raise ValidationError({'error': 'Les enseignants et promotions doivent être des listes.'})
 
-        teachers = Professor.objects.filter(id__in=teacher_ids, faculte=secretaire.faculte)
+        teachers = Professor.objects.filter(id__in=teacher_ids)
         if teachers.count() != len(set(teacher_ids)):
-            raise ValidationError({'enseignants': 'Un ou plusieurs enseignants ne font pas partie de votre faculté.'})
+            raise ValidationError({'enseignants': 'Un ou plusieurs enseignants sont introuvables.'})
 
         cleaned_promotions = [str(promotion).strip() for promotion in promotions if str(promotion).strip()]
         course.enseignants.set(teachers)
